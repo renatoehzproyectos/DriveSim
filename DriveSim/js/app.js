@@ -1,16 +1,8 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initialize Cesium without API key – Esri World Imagery (satellite)
-    // Cesium 1.107+ removed imageryProvider option – use baseLayer instead
-    // Note: Esri tiles use {z}/{y}/{x} order (not the usual {z}/{x}/{y})
-    const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        credit: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-        maximumLevel: 19
-    });
-
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Create Viewer with NO base imagery first (prevents ion / blue fallback)
     const viewer = new Cesium.Viewer('cesiumContainer', {
-        baseLayer: new Cesium.ImageryLayer(satelliteProvider),
-        terrainProvider: new Cesium.EllipsoidTerrainProvider(), // Explicitly flat
+        baseLayer: false,                       // critical: no default ion layer
+        terrainProvider: new Cesium.EllipsoidTerrainProvider(),
         geocoder: false,
         homeButton: false,
         sceneModePicker: false,
@@ -24,25 +16,44 @@ document.addEventListener('DOMContentLoaded', () => {
         selectionIndicator: false
     });
 
-    // Remove Cesium logo and credit widget to maximize mobile viewport space safely
+    // Hide Cesium credit / ion logo
     if (viewer.creditContainer) {
         viewer.creditContainer.style.display = 'none';
     }
 
-    // Adjust camera performance and settings
+    // Performance & look
     viewer.scene.fog.enabled = false;
     viewer.scene.highDynamicRange = false;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.skyAtmosphere.show = true;
-    // Natural earth-tone fallback while satellite tiles load (avoids pure blue)
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#2d4a3e');
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a2f1a'); // dark green while loading
 
-    // 2. Instantiate Components
+    // 2. Load real satellite imagery (Esri World Imagery)
+    // Prefer the official ArcGIS provider; fall back to UrlTemplate if needed
+    try {
+        const esriProvider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+            'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+        );
+        viewer.imageryLayers.removeAll();
+        viewer.imageryLayers.addImageryProvider(esriProvider);
+    } catch (err) {
+        console.warn('ArcGIS provider failed, using UrlTemplate fallback', err);
+        // Fallback – note Esri uses {z}/{y}/{x}
+        const fallback = new Cesium.UrlTemplateImageryProvider({
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            maximumLevel: 19,
+            credit: '© Esri, Maxar, Earthstar Geographics'
+        });
+        viewer.imageryLayers.removeAll();
+        viewer.imageryLayers.addImageryProvider(fallback);
+    }
+
+    // 3. Instantiate Components
     const vehicle = new Vehicle(viewer);
     const controls = new Controls();
     const navigation = new Navigation(viewer, vehicle);
 
-    // 3. Camera height slider (top-left) – keeps camera focused on the car
+    // 4. Camera height slider (top-left) – keeps camera focused on the car
     const camSlider = document.getElementById('cam-height-slider');
     const camValueLabel = document.getElementById('cam-height-value');
     if (camSlider) {
@@ -52,33 +63,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const h = parseFloat(camSlider.value);
             vehicle.cameraHeight = h;
             camValueLabel.textContent = `${h} m`;
-            // Force immediate camera refresh so the change is visible while stopped
             vehicle.updateCamera();
         });
     }
 
-    // 4. Main Simulator Loop
+    // 5. Main Simulator Loop
     let lastTime = performance.now();
 
     function simLoop(now) {
         let dt = (now - lastTime) / 1000;
-        
-        // Cap dt to prevent massive jumps on stutter
-        if (dt > 0.1) dt = 0.1; 
+        if (dt > 0.1) dt = 0.1;
         lastTime = now;
 
-        // Get Input State
         const input = controls.getInput();
-
-        // Update Vehicle Physics & Camera
         vehicle.update(dt, input);
-
-        // Update Minimap Position & Rotation
         navigation.update();
 
         requestAnimationFrame(simLoop);
     }
 
-    // Start Simulation Loop
     requestAnimationFrame(simLoop);
 });
