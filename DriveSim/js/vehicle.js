@@ -8,7 +8,9 @@ class Vehicle {
         this.height = 0;
         
         this.position = Cesium.Cartesian3.fromDegrees(this.lon, this.lat, this.height);
-        this.heading = 0; // Radians (0 is East, PI/2 is North)
+        // Heading convention: 0 = North, positive clockwise (matches Cesium HPR)
+        // East = PI/2, South = PI, West = 3*PI/2
+        this.heading = 0;
         this.velocity = 0; // m/s
         this.steering = 0; // -1 to 1
         
@@ -25,7 +27,7 @@ class Vehicle {
             orientation: new Cesium.CallbackProperty(() => {
                 return Cesium.Transforms.headingPitchRollQuaternion(
                     this.position,
-                    new Cesium.HeadingPitchRoll(this.heading, 0, 0)
+                    new Cesium.HeadingPitchRoll(this.heading - Math.PI / 2, 0, 0)
                 );
             }, false),
             model: {
@@ -54,9 +56,11 @@ class Vehicle {
         if (Math.abs(this.velocity) < 0.1) this.velocity = 0;
         this.velocity = Cesium.Math.clamp(this.velocity, -10, this.maxSpeed);
         
-        // Steering
+        // Steering (only when moving)
         if (Math.abs(this.velocity) > 0.1) {
             this.heading += input.steering * this.turnSpeed * dt * (this.velocity > 0 ? 1 : -1);
+            // Normalize heading to [0, 2PI)
+            this.heading = ((this.heading % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
         }
         
         // Calculate Displacement in meters
@@ -66,8 +70,9 @@ class Vehicle {
         const metersPerDegreeLat = 111111;
         const metersPerDegreeLon = 111111 * Math.cos(Cesium.Math.toRadians(this.lat));
         
-        const dLat = (Math.sin(this.heading) * moveStep) / metersPerDegreeLat;
-        const dLon = (Math.cos(this.heading) * moveStep) / metersPerDegreeLon;
+        // Heading 0 = North → dLat = cos, dLon = sin
+        const dLat = (Math.cos(this.heading) * moveStep) / metersPerDegreeLat;
+        const dLon = (Math.sin(this.heading) * moveStep) / metersPerDegreeLon;
         
         // Update Lon/Lat
         this.lat += dLat;
@@ -84,22 +89,22 @@ class Vehicle {
     }
 
     updateCamera() {
-        // Compute local frame camera placement (behind vehicle)
-        const backHeading = this.heading + Math.PI; // Opposite to heading
+        // Place camera behind the vehicle
+        const backHeading = this.heading + Math.PI;
         
         const metersPerDegreeLat = 111111;
         const metersPerDegreeLon = 111111 * Math.cos(Cesium.Math.toRadians(this.lat));
         
-        const camLat = this.lat + (Math.sin(backHeading) * this.cameraDistance) / metersPerDegreeLat;
-        const camLon = this.lon + (Math.cos(backHeading) * this.cameraDistance) / metersPerDegreeLon;
+        const camLat = this.lat + (Math.cos(backHeading) * this.cameraDistance) / metersPerDegreeLat;
+        const camLon = this.lon + (Math.sin(backHeading) * this.cameraDistance) / metersPerDegreeLon;
         
         const cameraPos = Cesium.Cartesian3.fromDegrees(camLon, camLat, this.height + this.cameraHeight);
         
-        // Set camera view facing the car
+        // Camera looks in the same direction the vehicle is facing
         this.viewer.camera.setView({
             destination: cameraPos,
             orientation: {
-                heading: this.heading - Cesium.Math.PI_OVER_TWO, // Align camera view direction
+                heading: this.heading,
                 pitch: Cesium.Math.toRadians(-15),
                 roll: 0
             }
@@ -108,5 +113,14 @@ class Vehicle {
     
     getLonLat() {
         return { lon: this.lon, lat: this.lat };
+    }
+
+    /** Instantly move vehicle to new coordinates and reset speed */
+    teleport(lon, lat) {
+        this.lon = lon;
+        this.lat = lat;
+        this.velocity = 0;
+        this.position = Cesium.Cartesian3.fromDegrees(this.lon, this.lat, this.height);
+        this.updateCamera();
     }
 }

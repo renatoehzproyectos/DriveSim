@@ -10,6 +10,7 @@ class Navigation {
         this.destinationMarker = null;
         
         this.initMinimap();
+        this.initSearchUI();
     }
 
     initMinimap() {
@@ -22,11 +23,11 @@ class Navigation {
             scrollWheelZoom: false,
             doubleClickZoom: false,
             boxZoom: false,
-            dragPan: false // Mobile driving focus
+            dragging: false // Mobile driving focus
         }).setView([start.lat, start.lon], 16);
 
         // Add OpenStreetMap dark style tiles for a "neon/cyber" look
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
             maxZoom: 19
         }).addTo(this.map);
 
@@ -39,11 +40,100 @@ class Navigation {
         
         this.carMarker = L.marker([start.lat, start.lon], { icon: carIcon }).addTo(this.map);
         
-        // Dynamic map rotation & interactions
-        // Clicking on the minimap sets destination
+        // Clicking on the minimap sets destination (route)
         this.map.on('click', (e) => {
             this.setDestination(e.latlng.lng, e.latlng.lat);
         });
+    }
+
+    initSearchUI() {
+        const input = document.getElementById('dest-input');
+        const routeBtn = document.getElementById('route-btn');
+        const teleportBtn = document.getElementById('teleport-btn');
+
+        const handleQuery = async (mode) => {
+            const query = input.value.trim();
+            if (!query) return;
+
+            // Show loading state
+            const originalRouteText = routeBtn.textContent;
+            const originalTeleportText = teleportBtn.textContent;
+            routeBtn.disabled = true;
+            teleportBtn.disabled = true;
+            if (mode === 'route') routeBtn.textContent = '...';
+            else teleportBtn.textContent = '...';
+
+            try {
+                const coords = await this.resolveQuery(query);
+                if (!coords) {
+                    alert('Location not found. Try a city, address, or "lat, lon"');
+                    return;
+                }
+
+                if (mode === 'route') {
+                    await this.setDestination(coords.lon, coords.lat);
+                } else {
+                    this.clearRoute();
+                    this.vehicle.teleport(coords.lon, coords.lat);
+                    // Update minimap immediately
+                    this.map.setView([coords.lat, coords.lon], 16);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error looking up location');
+            } finally {
+                routeBtn.disabled = false;
+                teleportBtn.disabled = false;
+                routeBtn.textContent = originalRouteText;
+                teleportBtn.textContent = originalTeleportText;
+            }
+        };
+
+        routeBtn.addEventListener('click', () => handleQuery('route'));
+        teleportBtn.addEventListener('click', () => handleQuery('teleport'));
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleQuery('route');
+            }
+        });
+    }
+
+    /**
+     * Resolve free-text query to {lon, lat}.
+     * Supports:
+     *  - "lat, lon" or "lon, lat" numeric pairs
+     *  - Place names / addresses via Nominatim (OpenStreetMap)
+     */
+    async resolveQuery(query) {
+        // Try numeric lat,lon or lon,lat
+        const numMatch = query.match(/^\s*(-?\d+\.?\d*)\s*[, ]\s*(-?\d+\.?\d*)\s*$/);
+        if (numMatch) {
+            const a = parseFloat(numMatch[1]);
+            const b = parseFloat(numMatch[2]);
+            // Heuristic: if |a| > 90 then a is lon
+            if (Math.abs(a) > 90) {
+                return { lon: a, lat: b };
+            }
+            return { lon: b, lat: a };
+        }
+
+        // Geocode with Nominatim
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'NeonOrbitDriveSim/1.0 (educational driving simulator)'
+            }
+        });
+        if (!response.ok) throw new Error('Geocoder failed');
+        const data = await response.json();
+        if (!data || data.length === 0) return null;
+        return {
+            lon: parseFloat(data[0].lon),
+            lat: parseFloat(data[0].lat)
+        };
     }
 
     update() {
@@ -53,11 +143,11 @@ class Navigation {
         // Center leaflet on car
         this.map.panTo([pos.lat, pos.lon], { animate: false });
         
-        // Spin the minimap container to simulate head-up navigation
+        // Rotate minimap so vehicle direction points "up" (HUD style)
+        // heading 0 = North → rotate by -heading
         const minimapEl = document.getElementById('minimap');
-        minimapEl.style.transform = `rotate(${-headingDeg - 90}deg)`; // Adjust by 90 for map orientation
+        minimapEl.style.transform = `rotate(${-headingDeg}deg)`;
         
-        // Adjust the center element to offset rotation visually
         this.carMarker.setLatLng([pos.lat, pos.lon]);
     }
 
@@ -78,10 +168,24 @@ class Navigation {
                 const route = data.routes[0];
                 this.drawRoute(route.geometry);
                 this.showInstructions(route.legs[0].steps);
+            } else {
+                console.warn('OSRM returned', data.code);
+                // Still place a destination marker even if no route
+                this.placeDestMarker(lon, lat);
             }
         } catch (error) {
             console.error("OSRM Route Error: ", error);
+            this.placeDestMarker(lon, lat);
         }
+    }
+
+    placeDestMarker(lon, lat) {
+        this.destinationMarker = L.marker([lat, lon], {
+            icon: L.divIcon({
+                className: 'dest-icon',
+                html: '<div style="width: 15px; height: 15px; background: #ff00cc; border-radius: 50%; box-shadow: 0 0 10px #ff00cc;"></div>'
+            })
+        }).addTo(this.map);
     }
 
     drawRoute(geometry) {
@@ -97,15 +201,10 @@ class Navigation {
         
         // Add destination marker
         const dest = coordinates[coordinates.length - 1];
-        this.destinationMarker = L.marker([dest[1], dest[0]], {
-            icon: L.divIcon({
-                className: 'dest-icon',
-                html: '<div style="width: 15px; height: 15px; background: #ff00cc; border-radius: 50%; box-shadow: 0 0 10px #ff00cc;"></div>'
-            })
-        }).addTo(this.map);
+        this.placeDestMarker(dest[0], dest[1]);
 
         // 2. Draw 3D Route in Cesium
-        const cesiumPoints = coordinates.map(c => Cesium.Cartesian3.fromDegrees(c[0], c[1], 1.0)); // slightly above flat ground
+        const cesiumPoints = coordinates.map(c => Cesium.Cartesian3.fromDegrees(c[0], c[1], 1.0));
         
         this.routePolylineCesium = this.viewer.entities.add({
             polyline: {
@@ -135,12 +234,16 @@ class Navigation {
     clearRoute() {
         if (this.routePolylineLeaflet) {
             this.map.removeLayer(this.routePolylineLeaflet);
+            this.routePolylineLeaflet = null;
         }
         if (this.destinationMarker) {
             this.map.removeLayer(this.destinationMarker);
+            this.destinationMarker = null;
         }
         if (this.routePolylineCesium) {
             this.viewer.entities.remove(this.routePolylineCesium);
+            this.routePolylineCesium = null;
         }
+        document.getElementById('nav-instructions').classList.add('hidden');
     }
 }
