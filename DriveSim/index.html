@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Orbit Drive - Cesium Sim</title>
+    
+    <!-- Cesium JS & CSS -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    
+    <!-- Leaflet JS & CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+    
+    <!-- Minimap Overlay -->
+    <div id="minimap-container">
+        <div id="minimap"></div>
+        <div id="minimap-border"></div>
+    </div>
+    
+    <!-- UI Overlays -->
+    <div id="ui-layer">
+        <div id="speedometer">
+            <span id="speed-value">0</span>
+            <span id="speed-unit">KM/H</span>
+        </div>
+        
+        <div id="nav-instructions" class="hidden">
+            <p id="nav-text">Drive to start...</p>
+        </div>
+    </div>
+    
+    <!-- Mobile Controls -->
+    <div id="controls-layer">
+        <div id="steering-container">
+            <div id="steering-wheel">
+                <div class="wheel-spoke"></div>
+                <div class="wheel-spoke"></div>
+                <div class="wheel-center"></div>
+            </div>
+        </div>
+        
+        <div id="pedals-container">
+            <div id="brake-pedal" class="pedal">BRAKE</div>
+            <div id="gas-pedal" class="pedal">GAS</div>
+        </div>
+    </div>
+
+    <!-- App Logic -->
+    <script src="js/vehicle.js"></script>
+    <script src="js/controls.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
