@@ -10,8 +10,12 @@ class Controls {
             isRotating: false,
             startAngle: 0,
             currentRotation: 0,
-            maxRotation: 450 // 1.25 turns
+            maxRotation: 450, // 1.25 turns
+            touchId: null    // which finger is on the wheel
         };
+        
+        this.gasTouchId = null;
+        this.brakeTouchId = null;
         
         this.initMobileControls();
         this.initKeyboardControls();
@@ -21,21 +25,75 @@ class Controls {
         const gasBtn = document.getElementById('gas-pedal');
         const brakeBtn = document.getElementById('brake-pedal');
         const wheel = document.getElementById('steering-wheel');
+        const steeringContainer = document.getElementById('steering-container');
         
-        // Gas
-        gasBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.input.gas = true; });
-        gasBtn.addEventListener('touchend', () => { this.input.gas = false; });
+        // --- GAS (track touch identity so other fingers don't interfere) ---
+        gasBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const t = e.changedTouches[0];
+            this.gasTouchId = t.identifier;
+            this.input.gas = true;
+        }, { passive: false });
         
-        // Brake
-        brakeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.input.brake = true; });
-        brakeBtn.addEventListener('touchend', () => { this.input.brake = false; });
+        gasBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            for (const t of e.changedTouches) {
+                if (t.identifier === this.gasTouchId) {
+                    this.gasTouchId = null;
+                    this.input.gas = false;
+                }
+            }
+        }, { passive: false });
         
-        // Steering Wheel Logic
-        const handleWheel = (e) => {
+        gasBtn.addEventListener('touchcancel', (e) => {
+            this.gasTouchId = null;
+            this.input.gas = false;
+        });
+
+        // --- BRAKE ---
+        brakeBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const t = e.changedTouches[0];
+            this.brakeTouchId = t.identifier;
+            this.input.brake = true;
+        }, { passive: false });
+        
+        brakeBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            for (const t of e.changedTouches) {
+                if (t.identifier === this.brakeTouchId) {
+                    this.brakeTouchId = null;
+                    this.input.brake = false;
+                }
+            }
+        }, { passive: false });
+        
+        brakeBtn.addEventListener('touchcancel', (e) => {
+            this.brakeTouchId = null;
+            this.input.brake = false;
+        });
+        
+        // --- STEERING WHEEL (dedicated touch id) ---
+        const getWheelTouch = (touches) => {
+            if (this.wheelState.touchId === null) return null;
+            for (let i = 0; i < touches.length; i++) {
+                if (touches[i].identifier === this.wheelState.touchId) {
+                    return touches[i];
+                }
+            }
+            return null;
+        };
+
+        const handleWheelMove = (e) => {
             if (!this.wheelState.isRotating) return;
+            const touch = getWheelTouch(e.touches);
+            if (!touch) return;
             e.preventDefault();
             
-            const touch = e.touches[0];
             const rect = wheel.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
@@ -43,7 +101,6 @@ class Controls {
             const angle = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
             let diff = angle - this.wheelState.startAngle;
             
-            // Normalize diff
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
             
@@ -55,30 +112,52 @@ class Controls {
             );
             
             this.wheelState.startAngle = angle;
-            
-            // Apply visual rotation
             wheel.style.transform = `rotate(${this.wheelState.currentRotation}deg)`;
-            
-            // Map to -1 to 1 steering
             this.input.steering = this.wheelState.currentRotation / this.wheelState.maxRotation;
         };
 
-        wheel.addEventListener('touchstart', (e) => {
-            const touch = e.touches[0];
+        const startWheel = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Prefer a new touch that isn't already on gas/brake
+            let touch = null;
+            for (const t of e.changedTouches) {
+                if (t.identifier !== this.gasTouchId && t.identifier !== this.brakeTouchId) {
+                    touch = t;
+                    break;
+                }
+            }
+            if (!touch) touch = e.changedTouches[0];
+            
             const rect = wheel.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             
             this.wheelState.isRotating = true;
+            this.wheelState.touchId = touch.identifier;
             this.wheelState.startAngle = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
-        });
+        };
 
-        window.addEventListener('touchmove', handleWheel, { passive: false });
-        window.addEventListener('touchend', () => {
-            this.wheelState.isRotating = false;
-            // Auto-center wheel (optional, lets make it feel like a real wheel)
-            this.autoCenter();
-        });
+        const endWheel = (e) => {
+            for (const t of e.changedTouches) {
+                if (t.identifier === this.wheelState.touchId) {
+                    this.wheelState.isRotating = false;
+                    this.wheelState.touchId = null;
+                    this.autoCenter();
+                    break;
+                }
+            }
+        };
+
+        // Bind to both the wheel and its larger container for easier grab
+        wheel.addEventListener('touchstart', startWheel, { passive: false });
+        if (steeringContainer) {
+            steeringContainer.addEventListener('touchstart', startWheel, { passive: false });
+        }
+        
+        window.addEventListener('touchmove', handleWheelMove, { passive: false });
+        window.addEventListener('touchend', endWheel, { passive: false });
+        window.addEventListener('touchcancel', endWheel, { passive: false });
     }
 
     autoCenter() {

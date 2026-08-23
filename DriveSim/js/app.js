@@ -21,14 +21,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         viewer.creditContainer.style.display = 'none';
     }
 
-    // Performance & look defaults (high quality far detail)
+    // Max graphics defaults
     viewer.scene.fog.enabled = false;
     viewer.scene.highDynamicRange = false;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a2f1a');
-    // Lower SSE = higher quality tiles farther away (default ~2, lower is sharper)
-    viewer.scene.globe.maximumScreenSpaceError = 1.5;
+    // Ultra-low SSE = sharp tiles even far away (default ~2)
+    viewer.scene.globe.maximumScreenSpaceError = 0.5;
+    viewer.scene.globe.tileCacheSize = 500;
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.5, 2.0);
+    viewer.scene.globe.preloadSiblings = true;
+    viewer.scene.globe.preloadAncestors = true;
+    // Request as many concurrent tiles as the browser allows
+    if (Cesium.RequestScheduler) {
+        Cesium.RequestScheduler.maximumRequestsPerServer = 18;
+    }
 
     // 2. Load real satellite imagery (Esri World Imagery)
     let imageryLayer = null;
@@ -68,44 +76,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // MAP quality: controls maximum imagery level (higher = sharper close-up satellite)
+    // MAP quality: resolution scale + anisotropy (sharper satellite close-up)
     const mapSlider = document.getElementById('map-quality-slider');
     const mapValueLabel = document.getElementById('map-quality-value');
-    if (mapSlider && imageryLayer) {
+    if (mapSlider) {
         const applyMapQuality = (level) => {
-            // Clamp imagery maximumLevel; higher = more detail when zoomed in
-            const provider = imageryLayer.imageryProvider;
-            if (provider && provider.maximumLevel !== undefined) {
-                provider._maximumLevel = level;
+            // level 1..19 → resolutionScale 0.5 .. 2.0
+            const scale = 0.4 + (level / 19) * 1.6;
+            viewer.resolutionScale = Math.min(scale, window.devicePixelRatio > 1 ? 2.5 : 2.0);
+            if (imageryLayer) {
+                imageryLayer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR;
+                imageryLayer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
             }
-            // Force refresh of tiles
-            viewer.scene.globe._surface._tilesToRender.length = 0;
-            const labels = { 1: 'LO', 10: 'MED', 15: 'HI', 18: 'MAX', 19: 'MAX' };
-            mapValueLabel.textContent = labels[level] || (level >= 17 ? 'MAX' : level >= 12 ? 'HI' : level >= 7 ? 'MED' : 'LO');
+            mapValueLabel.textContent = level >= 17 ? 'ULTRA' : level >= 14 ? 'MAX' : level >= 10 ? 'HI' : level >= 5 ? 'MED' : 'LO';
         };
         mapSlider.addEventListener('input', () => {
             applyMapQuality(parseInt(mapSlider.value, 10));
         });
-        applyMapQuality(parseInt(mapSlider.value, 10));
+        // Default to max
+        mapSlider.value = 19;
+        applyMapQuality(19);
     }
 
     // FAR quality: lower maximumScreenSpaceError = higher quality at distance
-    // Slider 1 (LO) → SSE 8, Slider 16 (HI) → SSE 0.5
+    // Slider 1 (LO) → SSE 6, Slider 16 (ULTRA) → SSE 0.25
     const farSlider = document.getElementById('render-dist-slider');
     const farValueLabel = document.getElementById('render-dist-value');
     if (farSlider) {
         const applyFarQuality = (val) => {
-            // Map 1→8 (low far detail) … 16→0.5 (high far detail)
-            const sse = 8.5 - (val * 0.5);
-            viewer.scene.globe.maximumScreenSpaceError = Math.max(0.5, sse);
-            // Also raise tile cache a bit when demanding high far quality
-            viewer.scene.globe.tileCacheSize = val >= 10 ? 200 : 100;
-            farValueLabel.textContent = val >= 13 ? 'MAX' : val >= 9 ? 'HI' : val >= 5 ? 'MED' : 'LO';
+            // Map 1→6 … 16→0.25
+            const t = (val - 1) / 15;
+            const sse = 6 - t * 5.75;
+            viewer.scene.globe.maximumScreenSpaceError = Math.max(0.25, sse);
+            viewer.scene.globe.tileCacheSize = 100 + Math.round(t * 500);
+            if (Cesium.RequestScheduler) {
+                Cesium.RequestScheduler.maximumRequestsPerServer = 6 + Math.round(t * 18);
+            }
+            farValueLabel.textContent = val >= 14 ? 'ULTRA' : val >= 11 ? 'MAX' : val >= 7 ? 'HI' : val >= 4 ? 'MED' : 'LO';
         };
         farSlider.addEventListener('input', () => {
             applyFarQuality(parseInt(farSlider.value, 10));
         });
-        applyFarQuality(parseInt(farSlider.value, 10));
+        // Default to max quality
+        farSlider.value = 16;
+        applyFarQuality(16);
     }
 
     // 5. Main Simulator Loop
