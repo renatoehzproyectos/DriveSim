@@ -8,9 +8,20 @@ class Navigation {
         this.routePolylineCesium = null;
         this.routePolylineLeaflet = null;
         this.destinationMarker = null;
+
+        // Device GPS / "you are here" clone
+        this.gpsWatchId = null;
+        this.gpsActive = false;
+        this.gpsLon = null;
+        this.gpsLat = null;
+        this.gpsAccuracy = null; // meters
+        this.gpsHeading = null;
+        this.deviceMarkerLeaflet = null;
+        this.deviceEntityCesium = null;
         
         this.initMinimap();
         this.initSearchUI();
+        this.initGpsUI();
     }
 
     initMinimap() {
@@ -246,5 +257,225 @@ class Navigation {
             this.routePolylineCesium = null;
         }
         document.getElementById('nav-instructions').classList.add('hidden');
+    }
+
+    // ─── Device Geolocation (ultra-high accuracy) ───────────────────────────
+
+    initGpsUI() {
+        const toggleBtn = document.getElementById('gps-toggle-btn');
+        const teleportBtn = document.getElementById('gps-teleport-btn');
+        const statusEl = document.getElementById('gps-status');
+        const accuracyEl = document.getElementById('gps-accuracy');
+
+        if (!toggleBtn || !teleportBtn) return;
+
+        if (!navigator.geolocation) {
+            toggleBtn.textContent = 'NO GPS';
+            toggleBtn.disabled = true;
+            return;
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            if (this.gpsActive) {
+                this.stopGps();
+            } else {
+                this.startGps();
+            }
+        });
+
+        teleportBtn.addEventListener('click', () => {
+            this.teleportToDevice();
+        });
+    }
+
+    startGps() {
+        const toggleBtn = document.getElementById('gps-toggle-btn');
+        const teleportBtn = document.getElementById('gps-teleport-btn');
+        const statusEl = document.getElementById('gps-status');
+        const accuracyEl = document.getElementById('gps-accuracy');
+
+        // Ultra precision options
+        const options = {
+            enableHighAccuracy: true,   // force GPS chip / best sensors
+            maximumAge: 0,              // never use cached position
+            timeout: 15000              // wait up to 15s for a fix
+        };
+
+        toggleBtn.textContent = 'LOCATING…';
+        toggleBtn.classList.add('active');
+        statusEl.classList.remove('hidden');
+        accuracyEl.textContent = 'acquiring…';
+
+        // Continuous watch for live tracking
+        this.gpsWatchId = navigator.geolocation.watchPosition(
+            (pos) => this.onGpsSuccess(pos),
+            (err) => this.onGpsError(err),
+            options
+        );
+        this.gpsActive = true;
+    }
+
+    stopGps() {
+        if (this.gpsWatchId !== null) {
+            navigator.geolocation.clearWatch(this.gpsWatchId);
+            this.gpsWatchId = null;
+        }
+        this.gpsActive = false;
+        this.gpsLon = null;
+        this.gpsLat = null;
+        this.gpsAccuracy = null;
+
+        // Remove visual clone
+        if (this.deviceMarkerLeaflet) {
+            this.map.removeLayer(this.deviceMarkerLeaflet);
+            this.deviceMarkerLeaflet = null;
+        }
+        if (this.deviceEntityCesium) {
+            this.viewer.entities.remove(this.deviceEntityCesium);
+            this.deviceEntityCesium = null;
+        }
+
+        const toggleBtn = document.getElementById('gps-toggle-btn');
+        const teleportBtn = document.getElementById('gps-teleport-btn');
+        const statusEl = document.getElementById('gps-status');
+
+        toggleBtn.textContent = 'GPS ON';
+        toggleBtn.classList.remove('active');
+        teleportBtn.disabled = true;
+        statusEl.classList.add('hidden');
+    }
+
+    onGpsSuccess(pos) {
+        const { latitude, longitude, accuracy, heading } = pos.coords;
+        this.gpsLat = latitude;
+        this.gpsLon = longitude;
+        this.gpsAccuracy = accuracy;
+        this.gpsHeading = (heading != null && !isNaN(heading)) ? heading : null;
+
+        // Update UI
+        const toggleBtn = document.getElementById('gps-toggle-btn');
+        const teleportBtn = document.getElementById('gps-teleport-btn');
+        const accuracyEl = document.getElementById('gps-accuracy');
+
+        toggleBtn.textContent = 'GPS LIVE';
+        toggleBtn.classList.add('active');
+        teleportBtn.disabled = false;
+
+        // Accuracy display – celebrate when it's excellent
+        let label;
+        if (accuracy <= 5) label = `±${accuracy.toFixed(1)} m  ULTRA`;
+        else if (accuracy <= 15) label = `±${accuracy.toFixed(0)} m  EXCELLENT`;
+        else if (accuracy <= 40) label = `±${accuracy.toFixed(0)} m  GOOD`;
+        else label = `±${accuracy.toFixed(0)} m`;
+        accuracyEl.textContent = label;
+
+        this.updateDeviceClone();
+    }
+
+    onGpsError(err) {
+        console.warn('GPS error', err);
+        const accuracyEl = document.getElementById('gps-accuracy');
+        const messages = {
+            1: 'Permission denied – allow location',
+            2: 'Position unavailable',
+            3: 'Timeout – try outdoors'
+        };
+        if (accuracyEl) {
+            accuracyEl.textContent = messages[err.code] || err.message || 'GPS error';
+        }
+        // Keep trying; watchPosition will fire again when possible
+    }
+
+    updateDeviceClone() {
+        if (this.gpsLon == null || this.gpsLat == null) return;
+
+        // ── Leaflet marker (distinct pink/gold pulse so it's clearly "you") ──
+        if (!this.deviceMarkerLeaflet) {
+            const youIcon = L.divIcon({
+                className: 'device-gps-icon',
+                html: `<div style="
+                    width: 22px; height: 22px;
+                    background: radial-gradient(circle, #ffcc00 30%, #ff00cc 100%);
+                    border: 2px solid #fff;
+                    border-radius: 50%;
+                    box-shadow: 0 0 14px #ff00cc, 0 0 6px #ffcc00;
+                "></div>`,
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            });
+            this.deviceMarkerLeaflet = L.marker([this.gpsLat, this.gpsLon], {
+                icon: youIcon,
+                zIndexOffset: 1000
+            }).addTo(this.map);
+        } else {
+            this.deviceMarkerLeaflet.setLatLng([this.gpsLat, this.gpsLon]);
+        }
+
+        // ── Cesium entity – visual clone of the car at your real position ──
+        const position = Cesium.Cartesian3.fromDegrees(this.gpsLon, this.gpsLat, 0.5);
+        const headingRad = this.gpsHeading != null
+            ? Cesium.Math.toRadians(this.gpsHeading)
+            : 0;
+
+        if (!this.deviceEntityCesium) {
+            this.deviceEntityCesium = this.viewer.entities.add({
+                position: position,
+                orientation: Cesium.Transforms.headingPitchRollQuaternion(
+                    position,
+                    new Cesium.HeadingPitchRoll(headingRad - Math.PI / 2, 0, 0)
+                ),
+                model: {
+                    uri: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf',
+                    minimumPixelSize: 48,
+                    maximumScale: 20000,
+                    color: Cesium.Color.fromCssColorString('#ff00cc').withAlpha(0.85),
+                    colorBlendMode: Cesium.ColorBlendMode.HIGHLIGHT,
+                    colorBlendAmount: 0.6
+                },
+                // Soft glow point so it's easy to spot from distance
+                point: {
+                    pixelSize: 14,
+                    color: Cesium.Color.fromCssColorString('#ffcc00'),
+                    outlineColor: Cesium.Color.fromCssColorString('#ff00cc'),
+                    outlineWidth: 3,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY
+                },
+                label: {
+                    text: 'YOU',
+                    font: 'bold 14px sans-serif',
+                    fillColor: Cesium.Color.WHITE,
+                    outlineColor: Cesium.Color.fromCssColorString('#ff00cc'),
+                    outlineWidth: 3,
+                    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                    pixelOffset: new Cesium.Cartesian2(0, -28),
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                }
+            });
+        } else {
+            this.deviceEntityCesium.position = position;
+            this.deviceEntityCesium.orientation = Cesium.Transforms.headingPitchRollQuaternion(
+                position,
+                new Cesium.HeadingPitchRoll(headingRad - Math.PI / 2, 0, 0)
+            );
+        }
+    }
+
+    /** Teleport the driven car right next to the device GPS position */
+    teleportToDevice() {
+        if (this.gpsLon == null || this.gpsLat == null) return;
+
+        // Small offset (~8 m north) so the clone and driven car don't occupy the exact same spot
+        const offsetMeters = 8;
+        const metersPerDegreeLat = 111111;
+        const dLat = offsetMeters / metersPerDegreeLat;
+
+        this.clearRoute();
+        this.vehicle.teleport(this.gpsLon, this.gpsLat + dLat);
+
+        // Snap minimap
+        this.map.setView([this.gpsLat, this.gpsLon], 17);
     }
 }
