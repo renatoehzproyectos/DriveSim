@@ -1,15 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initialize Cesium without API key (using free CartoDB Dark imagery)
+    // 1. Initialize Cesium without API key – Esri World Imagery (satellite)
     // Cesium 1.107+ removed imageryProvider option – use baseLayer instead
-    const cartoProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        subdomains: 'abcd',
-        credit: '© OpenStreetMap contributors, © CartoDB',
+    // Note: Esri tiles use {z}/{y}/{x} order (not the usual {z}/{x}/{y})
+    const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        credit: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
         maximumLevel: 19
     });
 
     const viewer = new Cesium.Viewer('cesiumContainer', {
-        baseLayer: new Cesium.ImageryLayer(cartoProvider),
+        baseLayer: new Cesium.ImageryLayer(satelliteProvider),
         terrainProvider: new Cesium.EllipsoidTerrainProvider(), // Explicitly flat
         geocoder: false,
         homeButton: false,
@@ -34,8 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     viewer.scene.highDynamicRange = false;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.skyAtmosphere.show = true;
-    // Ensure globe shows imagery (avoid pure blue fallback)
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a1a2e');
+    // Natural earth-tone fallback while satellite tiles load (avoids pure blue)
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#2d4a3e');
 
     // 2. Instantiate Components
     const vehicle = new Vehicle(viewer);

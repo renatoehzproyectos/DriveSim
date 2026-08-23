@@ -26,9 +26,10 @@ class Navigation {
             dragging: false // Mobile driving focus
         }).setView([start.lat, start.lon], 16);
 
-        // Add OpenStreetMap dark style tiles for a "neon/cyber" look
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-            maxZoom: 19
+        // Satellite tiles to match the main Cesium view
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: '© Esri'
         }).addTo(this.map);
 
         // Add vehicle marker in center
