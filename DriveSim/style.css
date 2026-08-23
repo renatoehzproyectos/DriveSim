@@ -54,6 +54,71 @@ body, html {
     background: radial-gradient(circle, transparent 60%, rgba(0, 243, 255, 0.2) 100%);
 }
 
+/* Camera height slider (top-left) */
+#cam-height-control {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--glass-bg);
+    border: 1px solid var(--neon-blue);
+    padding: 10px 12px;
+    border-radius: 16px;
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.25);
+    z-index: 100;
+    pointer-events: auto;
+    min-width: 70px;
+}
+
+#cam-height-control label {
+    color: var(--neon-blue);
+    font-size: 0.7rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+#cam-height-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 6px;
+    background: rgba(0, 243, 255, 0.25);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+#cam-height-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--neon-blue);
+    box-shadow: 0 0 8px var(--neon-blue);
+    cursor: pointer;
+}
+
+#cam-height-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--neon-blue);
+    box-shadow: 0 0 8px var(--neon-blue);
+    border: none;
+    cursor: pointer;
+}
+
+#cam-height-value {
+    color: #fff;
+    font-size: 0.75rem;
+    font-family: monospace;
+}
+
 /* Speedometer */
 #speedometer {
     position: absolute;

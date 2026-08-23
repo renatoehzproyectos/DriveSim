@@ -89,7 +89,8 @@ class Vehicle {
     }
 
     updateCamera() {
-        // Place camera behind the vehicle
+        // Place camera behind the vehicle; height is controlled by the top-left slider.
+        // Always keep the car as the visual center (look-at the vehicle).
         const backHeading = this.heading + Math.PI;
         
         const metersPerDegreeLat = 111111;
@@ -100,12 +101,15 @@ class Vehicle {
         
         const cameraPos = Cesium.Cartesian3.fromDegrees(camLon, camLat, this.height + this.cameraHeight);
         
-        // Camera looks in the same direction the vehicle is facing
+        // Dynamic pitch so the car stays centered in the frame regardless of camera height
+        // Higher camera → steeper look-down angle
+        const pitchDeg = -Math.min(45, 8 + this.cameraHeight * 0.6);
+        
         this.viewer.camera.setView({
             destination: cameraPos,
             orientation: {
                 heading: this.heading,
-                pitch: Cesium.Math.toRadians(-15),
+                pitch: Cesium.Math.toRadians(pitchDeg),
                 roll: 0
             }
         });
