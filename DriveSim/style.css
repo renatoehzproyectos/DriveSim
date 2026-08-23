@@ -125,6 +125,33 @@ body, html {
     font-family: monospace;
 }
 
+/* FOV boost toggle under left controls */
+.toggle-btn {
+    background: var(--glass-bg);
+    border: 1px solid var(--neon-blue);
+    color: var(--neon-blue);
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.22);
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    touch-action: manipulation;
+}
+
+.toggle-btn:hover {
+    box-shadow: 0 0 14px rgba(0, 243, 255, 0.45);
+}
+
+.toggle-btn.active {
+    background: rgba(0, 243, 255, 0.25);
+    color: #fff;
+    border-color: var(--neon-green);
+    box-shadow: 0 0 14px rgba(0, 255, 102, 0.4);
+}
+
 /* Top HUD: side buttons + speedometer */
 #top-hud {
     position: absolute;

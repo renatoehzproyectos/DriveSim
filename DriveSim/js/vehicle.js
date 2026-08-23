@@ -40,10 +40,19 @@ class Vehicle {
         // Camera setup – distance scales with height so car stays centered
         this.cameraDistance = 25;
         this.cameraHeight = 8;
+        // 0 = locked on car, 1 = tilted toward horizon
+        this.cameraAimBias = 0;
+        // FOV boost while accelerating
+        this.fovBoostEnabled = false;
+        this.baseFov = Cesium.Math.toRadians(60);
+        this.maxFovBoost = Cesium.Math.toRadians(18); // up to ~78° when full throttle
+        this.currentFov = this.baseFov;
+        this._accelerating = false;
     }
 
     update(dt, input) {
         // Linear acceleration – gas adds speed, brake removes it
+        this._accelerating = !!input.gas && this.velocity >= 0;
         if (input.gas) {
             this.velocity += this.acceleration * dt;
         }
@@ -92,19 +101,43 @@ class Vehicle {
     }
 
     updateCamera() {
-        // Always keep the car as the exact look-at target.
-        // Distance scales with height so the vehicle stays centered at any zoom.
+        // Distance scales with height so the vehicle stays framed at any zoom.
         const range = Math.max(15, this.cameraHeight * 2.2 + 10);
-        const pitch = Cesium.Math.toRadians(-Math.min(60, 15 + this.cameraHeight * 0.5));
+        const basePitchDeg = -Math.min(60, 15 + this.cameraHeight * 0.5);
+        // AIM bias: 0 = look straight at car, 1 = lift pitch toward horizon + look ahead
+        const bias = Cesium.Math.clamp(this.cameraAimBias, 0, 1);
+        const pitch = Cesium.Math.toRadians(basePitchDeg + bias * 28); // raise pitch toward horizon
 
-        // lookAt keeps the target (car) locked in the center of the view
+        // Look-at point: blend car position with a point ahead along heading
+        // so horizon bias centers the view further down the road
+        let target = this.position;
+        if (bias > 0.001) {
+            const metersPerDegreeLat = 111111;
+            const metersPerDegreeLon = 111111 * Math.cos(Cesium.Math.toRadians(this.lat));
+            const lookAhead = bias * (range * 0.55 + 12); // meters forward
+            const dLat = (Math.cos(this.heading) * lookAhead) / metersPerDegreeLat;
+            const dLon = (Math.sin(this.heading) * lookAhead) / metersPerDegreeLon;
+            target = Cesium.Cartesian3.fromDegrees(
+                this.lon + dLon,
+                this.lat + dLat,
+                this.height + bias * this.cameraHeight * 0.35
+            );
+        }
+
         this.viewer.camera.lookAt(
-            this.position,
+            target,
             new Cesium.HeadingPitchRange(this.heading, pitch, range)
         );
-
-        // Immediately unlock the transform so the next frame can move freely
         this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+
+        // Dynamic FOV: widen while accelerating when FOV+ is on
+        const wantBoost = this.fovBoostEnabled && this._accelerating && this.velocity > 1;
+        const targetFov = wantBoost
+            ? this.baseFov + this.maxFovBoost * Math.min(1, this.velocity / this.maxSpeed)
+            : this.baseFov;
+        // Smooth lerp so it doesn't snap
+        this.currentFov += (targetFov - this.currentFov) * 0.08;
+        this.viewer.camera.frustum.fov = this.currentFov;
     }
     
     getLonLat() {

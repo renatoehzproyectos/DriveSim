@@ -34,6 +34,11 @@
                 <span id="cam-height-value">8 m</span>
             </div>
             <div class="slider-group">
+                <label for="cam-aim-slider">AIM</label>
+                <input type="range" id="cam-aim-slider" min="0" max="100" step="1" value="0">
+                <span id="cam-aim-value">CAR</span>
+            </div>
+            <div class="slider-group">
                 <label for="map-quality-slider">MAP</label>
                 <input type="range" id="map-quality-slider" min="1" max="19" step="1" value="18">
                 <span id="map-quality-value">HI</span>
@@ -43,6 +48,7 @@
                 <input type="range" id="render-dist-slider" min="1" max="16" step="1" value="2">
                 <span id="render-dist-value">HI</span>
             </div>
+            <button id="fov-boost-btn" class="toggle-btn" title="Widen FOV while accelerating">FOV+</button>
         </div>
 
         <!-- Speed + side action buttons -->

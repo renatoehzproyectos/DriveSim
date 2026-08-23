@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controls = new Controls();
     const navigation = new Navigation(viewer, vehicle);
 
-    // 4. Sliders – CAM / MAP / FAR
+    // 4. Sliders – CAM / AIM / MAP / FAR + FOV boost toggle
     const camSlider = document.getElementById('cam-height-slider');
     const camValueLabel = document.getElementById('cam-height-value');
     if (camSlider) {
@@ -75,6 +75,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             vehicle.cameraHeight = h;
             camValueLabel.textContent = `${h} m`;
             vehicle.updateCamera();
+        });
+    }
+
+    // AIM: 0 = center on car, 100 = center toward horizon
+    const aimSlider = document.getElementById('cam-aim-slider');
+    const aimValueLabel = document.getElementById('cam-aim-value');
+    if (aimSlider) {
+        aimSlider.value = Math.round(vehicle.cameraAimBias * 100);
+        aimValueLabel.textContent = vehicle.cameraAimBias < 0.15 ? 'CAR'
+            : vehicle.cameraAimBias > 0.85 ? 'HORIZON' : `${Math.round(vehicle.cameraAimBias * 100)}%`;
+        aimSlider.addEventListener('input', () => {
+            const v = parseInt(aimSlider.value, 10) / 100;
+            vehicle.cameraAimBias = v;
+            aimValueLabel.textContent = v < 0.15 ? 'CAR' : v > 0.85 ? 'HORIZON' : `${Math.round(v * 100)}%`;
+            vehicle.updateCamera();
+        });
+    }
+
+    // FOV+ toggle: widen FOV while accelerating
+    const fovBtn = document.getElementById('fov-boost-btn');
+    if (fovBtn) {
+        const syncFovBtn = () => {
+            fovBtn.classList.toggle('active', vehicle.fovBoostEnabled);
+            fovBtn.textContent = vehicle.fovBoostEnabled ? 'FOV+ ON' : 'FOV+';
+        };
+        syncFovBtn();
+        fovBtn.addEventListener('click', () => {
+            vehicle.fovBoostEnabled = !vehicle.fovBoostEnabled;
+            syncFovBtn();
         });
     }
 
