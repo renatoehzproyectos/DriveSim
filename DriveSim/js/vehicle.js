@@ -14,11 +14,11 @@ class Vehicle {
         this.velocity = 0; // m/s
         this.steering = 0; // -1 to 1
         
-        // Constants – 200 km/h top speed
+        // Constants – 200 km/h top speed, linear acceleration, low drag
         this.maxSpeed = 55.56; // 200 km/h in m/s
-        this.acceleration = 18; // m/s^2 (slightly stronger for higher top speed)
-        this.friction = 0.985;
-        this.braking = 35;
+        this.acceleration = 14; // m/s^2 – steady linear pull
+        this.friction = 0.998;  // very low drag so speed climbs and holds easily
+        this.braking = 40;
         this.turnSpeed = 1.6;
         
         // Entity
@@ -43,16 +43,19 @@ class Vehicle {
     }
 
     update(dt, input) {
-        // Apply Physics
+        // Linear acceleration – gas adds speed, brake removes it
         if (input.gas) {
             this.velocity += this.acceleration * dt;
         }
         if (input.brake) {
             this.velocity -= this.braking * dt;
         }
-        
-        // Friction & Limits
-        this.velocity *= this.friction;
+
+        // Light coasting friction only when not on gas (keeps accel linear)
+        if (!input.gas) {
+            this.velocity *= this.friction;
+        }
+
         if (Math.abs(this.velocity) < 0.1) this.velocity = 0;
         this.velocity = Cesium.Math.clamp(this.velocity, -10, this.maxSpeed);
         
