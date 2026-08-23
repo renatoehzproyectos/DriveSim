@@ -45,22 +45,27 @@
             </div>
         </div>
 
-        <div id="speedometer">
-            <span id="speed-value">0</span>
-            <span id="speed-unit">KM/H</span>
-        </div>
-        
-        <!-- Destination Search / Teleport -->
-        <div id="search-container">
-            <input type="text" id="dest-input" placeholder="Address, city or lat, lon" autocomplete="off" enterkeyhint="go">
-            <div id="search-buttons">
+        <!-- Speed + side action buttons -->
+        <div id="top-hud">
+            <div id="side-btns-left">
                 <button id="route-btn" title="Create driving route">ROUTE</button>
-                <button id="teleport-btn" title="Instantly jump there">TELEPORT</button>
-            </div>
-            <div id="gps-buttons">
                 <button id="gps-toggle-btn" title="Track your real GPS position with ultra accuracy">GPS ON</button>
+            </div>
+
+            <div id="speedometer">
+                <span id="speed-value">0</span>
+                <span id="speed-unit">KM/H</span>
+            </div>
+
+            <div id="side-btns-right">
+                <button id="teleport-btn" title="Instantly jump there">TELEPORT</button>
                 <button id="gps-teleport-btn" title="Teleport car next to you" disabled>TO ME</button>
             </div>
+        </div>
+        
+        <!-- Destination Search -->
+        <div id="search-container">
+            <input type="text" id="dest-input" placeholder="Address, city or lat, lon" autocomplete="off" enterkeyhint="go">
             <div id="gps-status" class="hidden">
                 <span id="gps-accuracy">—</span>
             </div>

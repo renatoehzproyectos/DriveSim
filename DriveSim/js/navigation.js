@@ -18,6 +18,15 @@ class Navigation {
         this.gpsHeading = null;
         this.deviceMarkerLeaflet = null;
         this.deviceEntityCesium = null;
+
+        // Smooth tween state for the device clone (avoids teleport jumps)
+        this.deviceDisplayLon = null;
+        this.deviceDisplayLat = null;
+        this.deviceDisplayHeading = 0;
+        this.deviceTargetLon = null;
+        this.deviceTargetLat = null;
+        this.deviceTargetHeading = 0;
+        this.deviceTweenSpeed = 2.8; // higher = snappier, still smooth
         
         this.initMinimap();
         this.initSearchUI();
@@ -161,6 +170,9 @@ class Navigation {
         minimapEl.style.transform = `rotate(${-headingDeg}deg)`;
         
         this.carMarker.setLatLng([pos.lat, pos.lon]);
+
+        // Smoothly tween the device GPS clone toward its latest target
+        this.tweenDeviceClone();
     }
 
     async setDestination(lon, lat) {
@@ -325,6 +337,14 @@ class Navigation {
         this.gpsLat = null;
         this.gpsAccuracy = null;
 
+        // Reset tween state
+        this.deviceDisplayLon = null;
+        this.deviceDisplayLat = null;
+        this.deviceDisplayHeading = 0;
+        this.deviceTargetLon = null;
+        this.deviceTargetLat = null;
+        this.deviceTargetHeading = 0;
+
         // Remove visual clone
         if (this.deviceMarkerLeaflet) {
             this.map.removeLayer(this.deviceMarkerLeaflet);
@@ -386,9 +406,52 @@ class Navigation {
         // Keep trying; watchPosition will fire again when possible
     }
 
+    /**
+     * Called on every GPS fix. Sets the *target* position; the actual visual
+     * is smoothly interpolated in tweenDeviceClone() each frame.
+     */
     updateDeviceClone() {
         if (this.gpsLon == null || this.gpsLat == null) return;
 
+        this.deviceTargetLon = this.gpsLon;
+        this.deviceTargetLat = this.gpsLat;
+        this.deviceTargetHeading = (this.gpsHeading != null && !isNaN(this.gpsHeading))
+            ? this.gpsHeading
+            : this.deviceTargetHeading;
+
+        // First fix: snap display to target so we don't start from (0,0)
+        if (this.deviceDisplayLon == null) {
+            this.deviceDisplayLon = this.deviceTargetLon;
+            this.deviceDisplayLat = this.deviceTargetLat;
+            this.deviceDisplayHeading = this.deviceTargetHeading;
+            this.applyDeviceVisual(this.deviceDisplayLon, this.deviceDisplayLat, this.deviceDisplayHeading);
+        }
+    }
+
+    /**
+     * Frame-by-frame exponential lerp of the device clone toward its target.
+     * Called from the main sim loop so movement is buttery smooth.
+     */
+    tweenDeviceClone() {
+        if (this.deviceTargetLon == null || this.deviceDisplayLon == null) return;
+
+        // Approximate frame dt (~16 ms at 60 fps). Exponential ease feels natural.
+        const alpha = 1 - Math.exp(-this.deviceTweenSpeed * (1 / 60));
+
+        this.deviceDisplayLon += (this.deviceTargetLon - this.deviceDisplayLon) * alpha;
+        this.deviceDisplayLat += (this.deviceTargetLat - this.deviceDisplayLat) * alpha;
+
+        // Shortest-path heading lerp (degrees)
+        let dH = this.deviceTargetHeading - this.deviceDisplayHeading;
+        while (dH > 180) dH -= 360;
+        while (dH < -180) dH += 360;
+        this.deviceDisplayHeading += dH * alpha;
+
+        this.applyDeviceVisual(this.deviceDisplayLon, this.deviceDisplayLat, this.deviceDisplayHeading);
+    }
+
+    /** Push the current displayed lon/lat/heading into Leaflet + Cesium */
+    applyDeviceVisual(lon, lat, headingDeg) {
         // ── Leaflet marker (distinct pink/gold pulse so it's clearly "you") ──
         if (!this.deviceMarkerLeaflet) {
             const youIcon = L.divIcon({
@@ -403,19 +466,17 @@ class Navigation {
                 iconSize: [22, 22],
                 iconAnchor: [11, 11]
             });
-            this.deviceMarkerLeaflet = L.marker([this.gpsLat, this.gpsLon], {
+            this.deviceMarkerLeaflet = L.marker([lat, lon], {
                 icon: youIcon,
                 zIndexOffset: 1000
             }).addTo(this.map);
         } else {
-            this.deviceMarkerLeaflet.setLatLng([this.gpsLat, this.gpsLon]);
+            this.deviceMarkerLeaflet.setLatLng([lat, lon]);
         }
 
         // ── Cesium entity – visual clone of the car at your real position ──
-        const position = Cesium.Cartesian3.fromDegrees(this.gpsLon, this.gpsLat, 0.5);
-        const headingRad = this.gpsHeading != null
-            ? Cesium.Math.toRadians(this.gpsHeading)
-            : 0;
+        const position = Cesium.Cartesian3.fromDegrees(lon, lat, 0.5);
+        const headingRad = Cesium.Math.toRadians(headingDeg);
 
         if (!this.deviceEntityCesium) {
             this.deviceEntityCesium = this.viewer.entities.add({
