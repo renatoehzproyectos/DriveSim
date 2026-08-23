@@ -54,36 +54,42 @@ body, html {
     background: radial-gradient(circle, transparent 60%, rgba(0, 243, 255, 0.2) 100%);
 }
 
-/* Camera height slider (top-left) */
-#cam-height-control {
+/* Left control panel (CAM / MAP / FAR) */
+#left-controls {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    top: 16px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+    pointer-events: auto;
+}
+
+.slider-group {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     background: var(--glass-bg);
     border: 1px solid var(--neon-blue);
-    padding: 10px 12px;
-    border-radius: 16px;
-    box-shadow: 0 0 12px rgba(0, 243, 255, 0.25);
-    z-index: 100;
-    pointer-events: auto;
-    min-width: 70px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.22);
+    min-width: 72px;
 }
 
-#cam-height-control label {
+.slider-group label {
     color: var(--neon-blue);
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: bold;
     letter-spacing: 1px;
 }
 
-#cam-height-slider {
+.slider-group input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
-    width: 90px;
+    width: 88px;
     height: 6px;
     background: rgba(0, 243, 255, 0.25);
     border-radius: 3px;
@@ -92,7 +98,7 @@ body, html {
     touch-action: manipulation;
 }
 
-#cam-height-slider::-webkit-slider-thumb {
+.slider-group input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 18px;
@@ -103,7 +109,7 @@ body, html {
     cursor: pointer;
 }
 
-#cam-height-slider::-moz-range-thumb {
+.slider-group input[type="range"]::-moz-range-thumb {
     width: 18px;
     height: 18px;
     border-radius: 50%;
@@ -113,9 +119,9 @@ body, html {
     cursor: pointer;
 }
 
-#cam-height-value {
+.slider-group span {
     color: #fff;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-family: monospace;
 }
 
@@ -253,15 +259,21 @@ body, html {
     pointer-events: auto;
 }
 
-/* Steering Wheel */
+/* Larger invisible hit area so small hands can grab the wheel easily */
+#steering-container {
+    padding: 30px;
+    margin: -30px;
+}
+
+/* Steering Wheel – bigger visual + touch target */
 #steering-wheel {
-    width: 180px;
-    height: 180px;
-    border: 8px solid var(--glass-border);
+    width: 220px;
+    height: 220px;
+    border: 10px solid var(--glass-border);
     border-top-color: var(--neon-blue);
     border-radius: 50%;
     position: relative;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 10px var(--neon-blue);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.5), inset 0 0 12px var(--neon-blue);
     transition: transform 0.1s ease-out;
 }
 

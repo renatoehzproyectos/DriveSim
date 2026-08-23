@@ -26,11 +26,23 @@
     
     <!-- UI Overlays -->
     <div id="ui-layer">
-        <!-- Camera height slider (top-left) -->
-        <div id="cam-height-control">
-            <label for="cam-height-slider">CAM</label>
-            <input type="range" id="cam-height-slider" min="3" max="60" step="1" value="8">
-            <span id="cam-height-value">8 m</span>
+        <!-- Camera + quality controls (top-left) -->
+        <div id="left-controls">
+            <div class="slider-group">
+                <label for="cam-height-slider">CAM</label>
+                <input type="range" id="cam-height-slider" min="3" max="80" step="1" value="8">
+                <span id="cam-height-value">8 m</span>
+            </div>
+            <div class="slider-group">
+                <label for="map-quality-slider">MAP</label>
+                <input type="range" id="map-quality-slider" min="1" max="19" step="1" value="18">
+                <span id="map-quality-value">HI</span>
+            </div>
+            <div class="slider-group">
+                <label for="render-dist-slider">FAR</label>
+                <input type="range" id="render-dist-slider" min="1" max="16" step="1" value="2">
+                <span id="render-dist-value">HI</span>
+            </div>
         </div>
 
         <div id="speedometer">

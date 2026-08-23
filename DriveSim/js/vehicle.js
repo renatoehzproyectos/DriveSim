@@ -14,12 +14,12 @@ class Vehicle {
         this.velocity = 0; // m/s
         this.steering = 0; // -1 to 1
         
-        // Constants
-        this.maxSpeed = 40; // ~144 km/h
-        this.acceleration = 15; // m/s^2
-        this.friction = 0.98;
-        this.braking = 30;
-        this.turnSpeed = 1.5;
+        // Constants – 200 km/h top speed
+        this.maxSpeed = 55.56; // 200 km/h in m/s
+        this.acceleration = 18; // m/s^2 (slightly stronger for higher top speed)
+        this.friction = 0.985;
+        this.braking = 35;
+        this.turnSpeed = 1.6;
         
         // Entity
         this.entity = viewer.entities.add({
@@ -37,7 +37,7 @@ class Vehicle {
             }
         });
         
-        // Camera setup
+        // Camera setup – distance scales with height so car stays centered
         this.cameraDistance = 25;
         this.cameraHeight = 8;
     }
@@ -89,30 +89,19 @@ class Vehicle {
     }
 
     updateCamera() {
-        // Place camera behind the vehicle; height is controlled by the top-left slider.
-        // Always keep the car as the visual center (look-at the vehicle).
-        const backHeading = this.heading + Math.PI;
-        
-        const metersPerDegreeLat = 111111;
-        const metersPerDegreeLon = 111111 * Math.cos(Cesium.Math.toRadians(this.lat));
-        
-        const camLat = this.lat + (Math.cos(backHeading) * this.cameraDistance) / metersPerDegreeLat;
-        const camLon = this.lon + (Math.sin(backHeading) * this.cameraDistance) / metersPerDegreeLon;
-        
-        const cameraPos = Cesium.Cartesian3.fromDegrees(camLon, camLat, this.height + this.cameraHeight);
-        
-        // Dynamic pitch so the car stays centered in the frame regardless of camera height
-        // Higher camera → steeper look-down angle
-        const pitchDeg = -Math.min(45, 8 + this.cameraHeight * 0.6);
-        
-        this.viewer.camera.setView({
-            destination: cameraPos,
-            orientation: {
-                heading: this.heading,
-                pitch: Cesium.Math.toRadians(pitchDeg),
-                roll: 0
-            }
-        });
+        // Always keep the car as the exact look-at target.
+        // Distance scales with height so the vehicle stays centered at any zoom.
+        const range = Math.max(15, this.cameraHeight * 2.2 + 10);
+        const pitch = Cesium.Math.toRadians(-Math.min(60, 15 + this.cameraHeight * 0.5));
+
+        // lookAt keeps the target (car) locked in the center of the view
+        this.viewer.camera.lookAt(
+            this.position,
+            new Cesium.HeadingPitchRange(this.heading, pitch, range)
+        );
+
+        // Immediately unlock the transform so the next frame can move freely
+        this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     }
     
     getLonLat() {
