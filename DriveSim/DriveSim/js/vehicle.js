@@ -48,6 +48,12 @@ class Vehicle {
         this.maxFovBoost = Cesium.Math.toRadians(18); // up to ~78° when full throttle
         this.currentFov = this.baseFov;
         this._accelerating = false;
+
+        // Ground-clamping: periodically re-sample terrain/3D-tiles height
+        // so the car stays on the ground instead of floating/sinking.
+        this.heightSampleIntervalMs = 200;
+        this._heightSampleAccumMs = 0;
+        this._heightSampling = false;
     }
 
     update(dt, input) {
@@ -89,7 +95,14 @@ class Vehicle {
         // Update Lon/Lat
         this.lat += dLat;
         this.lon += dLon;
-        
+
+        // Ground-clamping: re-sample terrain height every heightSampleIntervalMs
+        this._heightSampleAccumMs += dt * 1000;
+        if (this._heightSampleAccumMs >= this.heightSampleIntervalMs) {
+            this._heightSampleAccumMs = 0;
+            this.sampleGroundHeight();
+        }
+
         // Resolve new Cartesian position
         this.position = Cesium.Cartesian3.fromDegrees(this.lon, this.lat, this.height);
         
@@ -144,6 +157,26 @@ class Vehicle {
         return { lon: this.lon, lat: this.lat };
     }
 
+    /** Samples the ground (terrain or 3D tiles) height under the car and clamps to it. */
+    sampleGroundHeight() {
+        if (this._heightSampling) return;
+        const scene = this.viewer.scene;
+        if (!scene || typeof scene.sampleHeight !== 'function' || !scene.sampleHeightSupported) return;
+
+        this._heightSampling = true;
+        try {
+            const carto = Cesium.Cartographic.fromDegrees(this.lon, this.lat);
+            const h = scene.sampleHeight(carto);
+            if (typeof h === 'number' && isFinite(h)) {
+                this.height = h;
+            }
+        } catch (e) {
+            // Sampling can fail transiently while tiles are still loading — ignore.
+        } finally {
+            this._heightSampling = false;
+        }
+    }
+
     /** Instantly move vehicle to new coordinates and reset speed */
     teleport(lon, lat) {
         this.lon = lon;
@@ -151,5 +184,6 @@ class Vehicle {
         this.velocity = 0;
         this.position = Cesium.Cartesian3.fromDegrees(this.lon, this.lat, this.height);
         this.updateCamera();
+        this.sampleGroundHeight();
     }
 }

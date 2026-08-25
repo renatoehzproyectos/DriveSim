@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#2d4a3e');
     viewer.scene.globe.maximumScreenSpaceError = 1.5;
     viewer.scene.globe.tileCacheSize = 120;
+    viewer.scene.globe.depthTestAgainstTerrain = true; // needed for accurate sampleHeight() ground-clamping
     // Never exceed device pixel ratio on mobile – higher values cause black screens
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     viewer.resolutionScale = isMobile ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.5);
@@ -106,10 +107,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     await applyTerrain(Settings.get().terrain);
-    Settings.initUI({ onTerrainChange: applyTerrain });
 
     // 3. Instantiate Components
     const vehicle = new Vehicle(viewer);
+    vehicle.heightSampleIntervalMs = Settings.get().heightSampleMs;
+    Settings.initUI({
+        onTerrainChange: applyTerrain,
+        onHeightSampleChange: (ms) => { vehicle.heightSampleIntervalMs = ms; }
+    });
     const controls = new Controls();
     const navigation = new Navigation(viewer, vehicle);
 

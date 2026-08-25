@@ -682,3 +682,28 @@ body, html {
         height: 40px;
     }
 }
+
+.settings-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 6px;
+}
+
+.settings-slider-row label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+}
+
+.settings-slider-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--neon-blue);
+}
+
+.settings-slider-row span {
+    font-size: 0.72rem;
+    color: var(--neon-blue);
+    min-width: 46px;
+    text-align: right;
+}

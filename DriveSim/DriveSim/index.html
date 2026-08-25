@@ -45,6 +45,13 @@
                 <label class="radio-row"><input type="radio" name="terrain-mode" value="flat"><span>Flat Terrain</span></label>
                 <label class="radio-row"><input type="radio" name="terrain-mode" value="worldterrain"><span>Cesium World Terrain</span></label>
                 <label class="radio-row"><input type="radio" name="terrain-mode" value="google3d"><span>Google Photorealistic 3D Tiles</span></label>
+
+                <div class="settings-slider-row">
+                    <label for="height-sample-slider">Ground sampling</label>
+                    <input type="range" id="height-sample-slider" min="50" max="1000" step="50" value="200">
+                    <span id="height-sample-value">200 ms</span>
+                </div>
+                <p class="settings-hint">How often the car re-samples terrain height to stay glued to the ground. Lower = smoother but heavier; higher = lighter but can pop on slopes.</p>
             </div>
 
             <div class="settings-section">

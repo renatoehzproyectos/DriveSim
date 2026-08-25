@@ -8,14 +8,16 @@ const Settings = (() => {
     const KEYS = {
         renderer: 'ds:renderer',
         terrain: 'ds:terrain',
-        ionToken: 'ds:ionToken'
+        ionToken: 'ds:ionToken',
+        heightSampleMs: 'ds:heightSampleMs'
     };
 
     function get() {
         return {
             renderer: localStorage.getItem(KEYS.renderer) || 'auto',
             terrain: localStorage.getItem(KEYS.terrain) || 'flat',
-            ionToken: localStorage.getItem(KEYS.ionToken) || ''
+            ionToken: localStorage.getItem(KEYS.ionToken) || '',
+            heightSampleMs: parseInt(localStorage.getItem(KEYS.heightSampleMs), 10) || 200
         };
     }
 
@@ -23,6 +25,7 @@ const Settings = (() => {
         if (partial.renderer !== undefined) localStorage.setItem(KEYS.renderer, partial.renderer);
         if (partial.terrain !== undefined) localStorage.setItem(KEYS.terrain, partial.terrain);
         if (partial.ionToken !== undefined) localStorage.setItem(KEYS.ionToken, partial.ionToken);
+        if (partial.heightSampleMs !== undefined) localStorage.setItem(KEYS.heightSampleMs, String(partial.heightSampleMs));
     }
 
     /** Rough heuristic for "bad device" that should not run Cesium 3D globe rendering */
@@ -56,8 +59,8 @@ const Settings = (() => {
         }
     }
 
-    /** Wires up the gear button + panel UI. Optional onTerrainChange callback(mode). */
-    function initUI({ onTerrainChange } = {}) {
+    /** Wires up the gear button + panel UI. Optional callbacks: onTerrainChange(mode), onHeightSampleChange(ms) */
+    function initUI({ onTerrainChange, onHeightSampleChange } = {}) {
         const state = get();
 
         const btn = document.getElementById('settings-btn');
@@ -85,6 +88,19 @@ const Settings = (() => {
         // Terrain only matters when Cesium is actually rendering
         if (resolveRenderer() !== 'cesium') {
             terrainSection.classList.add('disabled');
+        }
+
+        const heightSlider = document.getElementById('height-sample-slider');
+        const heightValueLabel = document.getElementById('height-sample-value');
+        if (heightSlider) {
+            heightSlider.value = state.heightSampleMs;
+            heightValueLabel.textContent = `${state.heightSampleMs} ms`;
+            heightSlider.addEventListener('input', () => {
+                const ms = parseInt(heightSlider.value, 10);
+                heightValueLabel.textContent = `${ms} ms`;
+                set({ heightSampleMs: ms });
+                if (typeof onHeightSampleChange === 'function') onHeightSampleChange(ms);
+            });
         }
 
         const tokenInput = document.getElementById('ion-token-input');
