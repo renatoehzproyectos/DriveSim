@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controls = new Controls();
     const navigation = new Navigation(viewer, vehicle);
 
-    // 4. Sliders – CAM / AIM / MAP / FAR + FOV boost toggle
+    // 4. Sliders – CAM / ZOOM / AIM / MAP + FOV boost toggle
     const camSlider = document.getElementById('cam-height-slider');
     const camValueLabel = document.getElementById('cam-height-value');
     if (camSlider) {
@@ -196,33 +196,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyMapQuality(12);
     }
 
-    // FAR: screen-space error – lower = sharper far tiles, but floor at 0.8 on mobile
-    const farSlider = document.getElementById('render-dist-slider');
-    const farValueLabel = document.getElementById('render-dist-value');
-    if (farSlider) {
-        const applyFarQuality = (val) => {
-            const t = (val - 1) / 15;
-            const minSSE = isMobile ? 0.8 : 0.5;
-            const sse = 5 - t * (5 - minSSE);
-            viewer.scene.globe.maximumScreenSpaceError = Math.max(minSSE, sse);
-            viewer.scene.globe.tileCacheSize = isMobile
-                ? 80 + Math.round(t * 80)
-                : 100 + Math.round(t * 200);
-            if (Cesium.RequestScheduler) {
-                Cesium.RequestScheduler.maximumRequestsPerServer = isMobile
-                    ? 6 + Math.round(t * 4)
-                    : 8 + Math.round(t * 8);
-            }
-            farValueLabel.textContent =
-                val >= 14 ? 'ULTRA' : val >= 11 ? 'MAX' : val >= 7 ? 'HI' : val >= 4 ? 'MED' : 'LO';
-        };
-        farSlider.addEventListener('input', () => {
-            applyFarQuality(parseInt(farSlider.value, 10));
-        });
-        // Start at HI for stable first paint
-        farSlider.value = 10;
-        applyFarQuality(10);
-    }
 
     // ZOOM: independent camera distance
     const zoomSlider = document.getElementById('cam-zoom-slider');
@@ -367,9 +340,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Screen Space Error / LOD
         if (sse) {
-            // Restore from FAR slider logic if available; else sensible default
-            if (globe.maximumScreenSpaceError < 0.1) {
-                globe.maximumScreenSpaceError = 1.5;
+            // Balanced default (was previously driven by the FAR slider)
+            if (globe.maximumScreenSpaceError < 0.1 || globe.maximumScreenSpaceError === 0.01) {
+                globe.maximumScreenSpaceError = isMobile ? 1.2 : 1.5;
             }
         } else {
             // Force ultra-high detail (no SSE culling) — heavy
