@@ -1,4 +1,17 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    // 0. Apply saved Cesium ion token before anything touches ion-backed assets
+    Settings.applyIonToken();
+
+    // Decide renderer: explicit user choice, or auto device-capability detection
+    const renderer = Settings.resolveRenderer();
+
+    if (renderer === 'leaflet') {
+        const controls = new Controls();
+        initLeafletFallback(controls);
+        Settings.initUI({});
+        return;
+    }
+
     // 1. Create Viewer with NO base imagery first (prevents ion / blue fallback)
     const viewer = new Cesium.Viewer('cesiumContainer', {
         baseLayer: false,
@@ -58,6 +71,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         viewer.imageryLayers.removeAll();
         imageryLayer = viewer.imageryLayers.addImageryProvider(fallback);
     }
+
+    // 2b. Terrain mode: flat | worldterrain | google3d (switchable live from Settings)
+    async function applyTerrain(mode) {
+        if (viewer._googleTileset) {
+            viewer.scene.primitives.remove(viewer._googleTileset);
+            viewer._googleTileset = null;
+        }
+        viewer.scene.globe.show = true;
+        if (imageryLayer) imageryLayer.show = true;
+
+        try {
+            if (mode === 'worldterrain') {
+                viewer.terrainProvider = await Cesium.createWorldTerrainAsync({
+                    requestWaterMask: true,
+                    requestVertexNormals: true
+                });
+            } else if (mode === 'google3d') {
+                const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+                viewer.scene.primitives.add(tileset);
+                viewer._googleTileset = tileset;
+                viewer.scene.globe.show = false;
+                if (imageryLayer) imageryLayer.show = false;
+                viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+            } else {
+                viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+            }
+        } catch (err) {
+            console.warn(`Terrain mode "${mode}" failed (check your Cesium ion token in Settings)`, err);
+            viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+            viewer.scene.globe.show = true;
+            if (imageryLayer) imageryLayer.show = true;
+            alert('Could not load this terrain. Check your Cesium ion access token in Settings (⚙).');
+        }
+    }
+    await applyTerrain(Settings.get().terrain);
+    Settings.initUI({ onTerrainChange: applyTerrain });
 
     // 3. Instantiate Components
     const vehicle = new Vehicle(viewer);

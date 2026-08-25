@@ -17,6 +17,47 @@
 </head>
 <body>
     <div id="cesiumContainer"></div>
+
+    <!-- Fullscreen Leaflet fallback (Plan B renderer) -->
+    <div id="leafletMainContainer" class="hidden"></div>
+
+    <!-- Settings (gear) button -->
+    <button id="settings-btn" title="Settings">⚙</button>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="hidden">
+        <div id="settings-panel-inner">
+            <div class="settings-header">
+                <span>SETTINGS</span>
+                <button id="settings-close-btn" title="Close">✕</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>Renderer</h3>
+                <p class="settings-hint">Leaflet is used automatically as a Plan B if your device can't handle Cesium 3D.</p>
+                <label class="radio-row"><input type="radio" name="renderer-mode" value="auto"><span>Auto (recommended)</span></label>
+                <label class="radio-row"><input type="radio" name="renderer-mode" value="cesium"><span>Force Cesium 3D</span></label>
+                <label class="radio-row"><input type="radio" name="renderer-mode" value="leaflet"><span>Force Leaflet (Plan B)</span></label>
+            </div>
+
+            <div class="settings-section" id="terrain-section">
+                <h3>Terrain (Cesium)</h3>
+                <label class="radio-row"><input type="radio" name="terrain-mode" value="flat"><span>Flat Terrain</span></label>
+                <label class="radio-row"><input type="radio" name="terrain-mode" value="worldterrain"><span>Cesium World Terrain</span></label>
+                <label class="radio-row"><input type="radio" name="terrain-mode" value="google3d"><span>Google Photorealistic 3D Tiles</span></label>
+            </div>
+
+            <div class="settings-section">
+                <h3>Cesium Ion Access Token</h3>
+                <p class="settings-hint">Required for World Terrain &amp; Google 3D Tiles. Get one at <a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">ion.cesium.com</a>.</p>
+                <input type="text" id="ion-token-input" placeholder="Paste your Cesium ion token here" autocomplete="off">
+                <button id="ion-token-save-btn">Save Token</button>
+                <span id="ion-token-status"></span>
+            </div>
+
+            <p id="settings-reload-note" class="hidden">Reload to apply the renderer change.</p>
+        </div>
+    </div>
     
     <!-- Minimap Overlay -->
     <div id="minimap-container">
@@ -99,9 +140,11 @@
     </div>
 
     <!-- App Logic -->
+    <script src="js/settings.js"></script>
     <script src="js/vehicle.js"></script>
     <script src="js/controls.js"></script>
     <script src="js/navigation.js"></script>
+    <script src="js/leaflet-fallback.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

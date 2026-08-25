@@ -497,3 +497,188 @@ body, html {
         font-size: 0.8rem;
     }
 }
+
+/* ===================== Settings (gear) & Plan B ===================== */
+
+.hidden {
+    display: none !important;
+}
+
+#leafletMainContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: #000;
+}
+
+.leaflet-car-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.leaflet-car-arrow {
+    width: 0;
+    height: 0;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-bottom: 20px solid var(--neon-green);
+    filter: drop-shadow(0 0 6px var(--neon-green));
+    transform-origin: 50% 60%;
+    transition: transform 0.05s linear;
+}
+
+#settings-btn {
+    position: absolute;
+    top: 185px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    border: 1px solid var(--neon-blue);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.22);
+    color: var(--neon-blue);
+    font-size: 1.3rem;
+    z-index: 110;
+    pointer-events: auto;
+}
+
+#settings-btn:active {
+    box-shadow: 0 0 16px var(--neon-blue);
+}
+
+#settings-panel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+#settings-panel-inner {
+    width: min(420px, 92vw);
+    max-height: 86vh;
+    overflow-y: auto;
+    background: var(--glass-bg);
+    border: 1px solid var(--neon-blue);
+    box-shadow: 0 0 24px rgba(0, 243, 255, 0.3);
+    border-radius: 16px;
+    padding: 16px 18px 20px;
+    color: #fff;
+    font-family: inherit;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--neon-blue);
+    margin-bottom: 10px;
+}
+
+#settings-close-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.1rem;
+    padding: 4px 8px;
+}
+
+.settings-section {
+    border-top: 1px solid var(--glass-border);
+    padding-top: 10px;
+    margin-top: 10px;
+}
+
+.settings-section h3 {
+    margin: 0 0 6px;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    color: var(--neon-pink);
+    text-transform: uppercase;
+}
+
+.settings-section.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.settings-hint {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.65);
+    margin: 0 0 8px;
+    line-height: 1.4;
+}
+
+.settings-hint a {
+    color: var(--neon-blue);
+}
+
+.radio-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 2px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.radio-row input {
+    accent-color: var(--neon-blue);
+    width: 16px;
+    height: 16px;
+}
+
+#ion-token-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    font-size: 0.8rem;
+    margin-bottom: 8px;
+}
+
+#ion-token-save-btn {
+    background: var(--neon-blue);
+    color: #001217;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+#ion-token-status {
+    margin-left: 10px;
+    font-size: 0.75rem;
+    color: var(--neon-green);
+}
+
+#settings-reload-note {
+    margin: 14px 0 0;
+    font-size: 0.75rem;
+    color: var(--neon-pink);
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    #settings-btn {
+        top: 175px;
+        right: 14px;
+        width: 40px;
+        height: 40px;
+    }
+}
