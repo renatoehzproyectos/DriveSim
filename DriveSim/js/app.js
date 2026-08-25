@@ -131,6 +131,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controls = new Controls();
     const navigation = new Navigation(viewer, vehicle);
 
+    const applyMapQuality = (level) => {
+        // Mobile max scale 1.25, desktop up to 1.75
+        const maxScale = isMobile ? 1.25 : 1.75;
+        const scale = 0.6 + (level / 19) * (maxScale - 0.6);
+        viewer.resolutionScale = scale;
+        const mapValueLabel = document.getElementById('map-quality-value');
+        if (mapValueLabel) {
+            mapValueLabel.textContent =
+                level >= 17 ? 'ULTRA' : level >= 14 ? 'MAX' : level >= 10 ? 'HI' : level >= 5 ? 'MED' : 'LO';
+        }
+    };
+    // Apply saved MAP quality at startup
+    applyMapQuality(saved.mapQuality || 12);
+
     Settings.initUI({
         onTerrainChange: applyTerrain,
         onHeightSampleChange: (ms) => { vehicle.heightSampleIntervalMs = ms; },
@@ -149,10 +163,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (typeof window.__driveSimApplyCulling === 'function') {
                 window.__driveSimApplyCulling();
             }
-        }
+        },
+        onMapQualityChange: applyMapQuality
     });
 
-    // ZOOM: independent camera distance (CAM / AIM / MAP removed)
+    // ZOOM: independent camera distance (CAM / AIM removed; MAP lives in Settings)
     const zoomSlider = document.getElementById('cam-zoom-slider');
     const zoomValueLabel = document.getElementById('cam-zoom-value');
     if (zoomSlider) {

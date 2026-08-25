@@ -63,6 +63,16 @@
                 <p class="settings-hint">Lag on turn / rotate / pitch only. Distance (zoom) stays instant.</p>
             </div>
 
+            <div class="settings-section" id="quality-section">
+                <h3>Quality (Cesium)</h3>
+                <div class="settings-slider-row">
+                    <label for="map-quality-slider">MAP</label>
+                    <input type="range" id="map-quality-slider" min="1" max="19" step="1" value="12">
+                    <span id="map-quality-value">HI</span>
+                </div>
+                <p class="settings-hint">Render resolution scale. Higher = sharper but heavier (phones are capped lower).</p>
+            </div>
+
             <div class="settings-section" id="terrain-section">
                 <h3>Terrain (Cesium)</h3>
                 <label class="radio-row"><input type="radio" name="terrain-mode" value="flat"><span>Flat Terrain</span></label>

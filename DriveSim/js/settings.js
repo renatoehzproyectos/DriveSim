@@ -14,7 +14,8 @@ const Settings = (() => {
         fovDeg: 'ds:fovDeg',
         followDelayMs: 'ds:followDelayMs',
         sseValue: 'ds:sseValue',
-        dynamicSse: 'ds:dynamicSse'
+        dynamicSse: 'ds:dynamicSse',
+        mapQuality: 'ds:mapQuality'
     };
 
     function get() {
@@ -26,7 +27,8 @@ const Settings = (() => {
             fovDeg: parseFloat(localStorage.getItem(KEYS.fovDeg)) || 60,
             followDelayMs: parseInt(localStorage.getItem(KEYS.followDelayMs), 10) || 0,
             sseValue: parseFloat(localStorage.getItem(KEYS.sseValue)) || 2,
-            dynamicSse: localStorage.getItem(KEYS.dynamicSse) === '1'
+            dynamicSse: localStorage.getItem(KEYS.dynamicSse) === '1',
+            mapQuality: parseInt(localStorage.getItem(KEYS.mapQuality), 10) || 12
         };
     }
 
@@ -39,6 +41,7 @@ const Settings = (() => {
         if (partial.followDelayMs !== undefined) localStorage.setItem(KEYS.followDelayMs, String(partial.followDelayMs));
         if (partial.sseValue !== undefined) localStorage.setItem(KEYS.sseValue, String(partial.sseValue));
         if (partial.dynamicSse !== undefined) localStorage.setItem(KEYS.dynamicSse, partial.dynamicSse ? '1' : '0');
+        if (partial.mapQuality !== undefined) localStorage.setItem(KEYS.mapQuality, String(partial.mapQuality));
     }
 
     /** Rough heuristic for "bad device" that should not run Cesium 3D globe rendering */
@@ -83,7 +86,8 @@ const Settings = (() => {
         onVehicleModeChange,
         onFovChange,
         onFollowDelayChange,
-        onSseChange
+        onSseChange,
+        onMapQualityChange
     } = {}) {
         const state = get();
 
@@ -188,6 +192,22 @@ const Settings = (() => {
             dynamicSseEl.addEventListener('change', () => {
                 set({ dynamicSse: dynamicSseEl.checked });
                 if (typeof onSseChange === 'function') onSseChange();
+            });
+        }
+
+        // MAP quality (resolution scale)
+        const mapSlider = document.getElementById('map-quality-slider');
+        const mapValueLabel = document.getElementById('map-quality-value');
+        if (mapSlider) {
+            const levelLabel = (level) =>
+                level >= 17 ? 'ULTRA' : level >= 14 ? 'MAX' : level >= 10 ? 'HI' : level >= 5 ? 'MED' : 'LO';
+            mapSlider.value = state.mapQuality;
+            if (mapValueLabel) mapValueLabel.textContent = levelLabel(state.mapQuality);
+            mapSlider.addEventListener('input', () => {
+                const level = parseInt(mapSlider.value, 10);
+                if (mapValueLabel) mapValueLabel.textContent = levelLabel(level);
+                set({ mapQuality: level });
+                if (typeof onMapQualityChange === 'function') onMapQualityChange(level);
             });
         }
 
