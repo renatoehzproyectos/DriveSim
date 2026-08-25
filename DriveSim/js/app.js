@@ -90,6 +90,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             } else if (mode === 'google3d') {
                 const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+                // Default 3D Tiles optimisations (Skip LOD + SSE)
+                tileset.skipLevelOfDetail = true;
+                tileset.immediatelyLoadDesiredLevelOfDetail = true;
+                tileset.loadSiblings = false;
+                tileset.skipScreenSpaceErrorFactor = 16;
+                tileset.skipLevels = 1;
+                tileset.maximumScreenSpaceError = 16;
+                if (tileset.backFaceCulling !== undefined) tileset.backFaceCulling = true;
                 viewer.scene.primitives.add(tileset);
                 viewer._googleTileset = tileset;
                 viewer.scene.globe.show = false;
@@ -104,6 +112,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             viewer.scene.globe.show = true;
             if (imageryLayer) imageryLayer.show = true;
             alert('Could not load this terrain. Check your Cesium ion access token in Settings (⚙).');
+        }
+        if (typeof window.__driveSimApplyCulling === 'function') {
+            window.__driveSimApplyCulling();
         }
     }
     await applyTerrain(Settings.get().terrain);
@@ -211,6 +222,210 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Start at HI for stable first paint
         farSlider.value = 10;
         applyFarQuality(10);
+    }
+
+    // ZOOM: independent camera distance
+    const zoomSlider = document.getElementById('cam-zoom-slider');
+    const zoomValueLabel = document.getElementById('cam-zoom-value');
+    if (zoomSlider) {
+        zoomSlider.value = vehicle.cameraDistance;
+        zoomValueLabel.textContent = `${vehicle.cameraDistance} m`;
+        zoomSlider.addEventListener('input', () => {
+            const d = parseFloat(zoomSlider.value);
+            vehicle.cameraDistance = d;
+            zoomValueLabel.textContent = `${d} m`;
+            vehicle.updateCamera();
+        });
+    }
+
+    // ORBIT: drag on the Cesium canvas to orbit around the vehicle
+    (function initOrbitControls() {
+        const canvas = viewer.scene.canvas;
+        const resetBtn = document.getElementById('orbit-reset-btn');
+        let dragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let pointerId = null;
+
+        const isUiTarget = (el) => {
+            if (!el || !el.closest) return false;
+            return !!(el.closest('#ui-layer') || el.closest('#controls-layer') ||
+                el.closest('#airplane-controls-layer') || el.closest('#settings-panel') ||
+                el.closest('#settings-btn') || el.closest('#minimap-container') ||
+                el.closest('#left-controls'));
+        };
+
+        const onDown = (e) => {
+            if (isUiTarget(e.target)) return;
+            // Only primary button / single touch
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            dragging = true;
+            pointerId = e.pointerId;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+            e.preventDefault();
+        };
+        const onMove = (e) => {
+            if (!dragging || (pointerId !== null && e.pointerId !== pointerId)) return;
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            // Sensitivity: ~0.35° per pixel
+            const sens = 0.006;
+            vehicle.applyOrbitDelta(-dx * sens, -dy * sens);
+            if (resetBtn) {
+                resetBtn.classList.add('active');
+                resetBtn.textContent = 'ORBIT ON';
+            }
+            e.preventDefault();
+        };
+        const onUp = (e) => {
+            if (!dragging) return;
+            if (pointerId !== null && e.pointerId !== pointerId) return;
+            dragging = false;
+            pointerId = null;
+            try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        };
+
+        canvas.addEventListener('pointerdown', onDown, { passive: false });
+        window.addEventListener('pointermove', onMove, { passive: false });
+        window.addEventListener('pointerup', onUp, { passive: false });
+        window.addEventListener('pointercancel', onUp, { passive: false });
+
+        // Mouse wheel / pinch-like zoom on canvas
+        canvas.addEventListener('wheel', (e) => {
+            if (isUiTarget(e.target)) return;
+            e.preventDefault();
+            const factor = e.deltaY > 0 ? 1.08 : 0.92;
+            vehicle.cameraDistance = Cesium.Math.clamp(
+                vehicle.cameraDistance * factor, 8, 200
+            );
+            if (zoomSlider) {
+                zoomSlider.value = Math.round(vehicle.cameraDistance);
+                zoomValueLabel.textContent = `${Math.round(vehicle.cameraDistance)} m`;
+            }
+            vehicle.updateCamera();
+        }, { passive: false });
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                vehicle.resetOrbit();
+                resetBtn.classList.remove('active');
+                resetBtn.textContent = 'ORBIT';
+            });
+        }
+
+        // Disable Cesium's default camera controller so our lookAt + orbit owns the view
+        const ctrl = viewer.scene.screenSpaceCameraController;
+        ctrl.enableRotate = false;
+        ctrl.enableTranslate = false;
+        ctrl.enableZoom = false;
+        ctrl.enableTilt = false;
+        ctrl.enableLook = false;
+    })();
+
+    // ---- Culling configuration (Cesium) ----
+    function applyCullingOptions() {
+        const scene = viewer.scene;
+        const globe = scene.globe;
+        const horizon = document.getElementById('cull-horizon')?.checked !== false;
+        const frustum = document.getElementById('cull-frustum')?.checked !== false;
+        const sse = document.getElementById('cull-sse')?.checked !== false;
+        const skipLod = document.getElementById('cull-skip-lod')?.checked !== false;
+        const terrainOcc = document.getElementById('cull-terrain-occ')?.checked !== false;
+        const backface = document.getElementById('cull-backface')?.checked !== false;
+
+        // Horizon Culling: discard geometry behind Earth curvature
+        // Cesium enables this by default on the globe; we also gate via show/atmosphere
+        if (typeof globe.depthTestAgainstTerrain !== 'undefined') {
+            // Terrain Occlusion uses the same depth test path
+            globe.depthTestAgainstTerrain = terrainOcc;
+        }
+        // Horizon: when disabled, raise far plane / disable atmosphere fade tricks
+        // Cesium's globe always does horizon culling of tiles; we approximate by
+        // toggling fog/atmosphere which are horizon-aware.
+        scene.skyAtmosphere.show = horizon;
+        if (scene.fog) {
+            // Keep fog off by default for neon look; horizon still culls tiles
+            scene.fog.enabled = false;
+        }
+
+        // Frustum Culling: automatic in Cesium; when "off" we widen near/far
+        // so almost everything is inside the frustum (debug-ish).
+        const frustumObj = scene.camera.frustum;
+        if (frustumObj && frustumObj.near !== undefined) {
+            if (frustum) {
+                frustumObj.near = 0.5;
+                frustumObj.far = 50000000;
+            } else {
+                frustumObj.near = 0.1;
+                frustumObj.far = 1e10; // essentially disable by making frustum huge
+            }
+        }
+
+        // Screen Space Error / LOD
+        if (sse) {
+            // Restore from FAR slider logic if available; else sensible default
+            if (globe.maximumScreenSpaceError < 0.1) {
+                globe.maximumScreenSpaceError = 1.5;
+            }
+        } else {
+            // Force ultra-high detail (no SSE culling) — heavy
+            globe.maximumScreenSpaceError = 0.01;
+        }
+
+        // Skip LOD + SSE + backface on Google 3D Tiles (and any future tilesets)
+        const applyToTileset = (tileset) => {
+            if (!tileset) return;
+            tileset.skipLevelOfDetail = skipLod;
+            tileset.immediatelyLoadDesiredLevelOfDetail = skipLod;
+            tileset.loadSiblings = !skipLod;
+            tileset.skipScreenSpaceErrorFactor = skipLod ? 16 : 0;
+            tileset.skipLevels = skipLod ? 1 : 0;
+            // SSE for tiles
+            if (!sse) {
+                tileset.maximumScreenSpaceError = 0.01;
+            } else if (tileset.maximumScreenSpaceError < 0.5) {
+                tileset.maximumScreenSpaceError = 16;
+            }
+            // Back-face culling on tileset
+            if (tileset.backFaceCulling !== undefined) {
+                tileset.backFaceCulling = backface;
+            }
+        };
+        if (viewer._googleTileset) applyToTileset(viewer._googleTileset);
+        // Also walk primitives for any 3D Tilesets
+        const prims = scene.primitives;
+        for (let i = 0; i < prims.length; i++) {
+            const p = prims.get(i);
+            if (p && p.maximumScreenSpaceError !== undefined) applyToTileset(p);
+        }
+
+        // Back-face culling on vehicle models (glTF)
+        const setModelBackface = (entity) => {
+            if (entity && entity.model) {
+                entity.model.backFaceCulling = backface;
+            }
+        };
+        setModelBackface(vehicle.carEntity);
+        // Airplane uses boxes (no glTF backface), but keep API consistent
+    }
+
+    // Wire culling checkboxes
+    ['cull-horizon', 'cull-frustum', 'cull-sse', 'cull-skip-lod', 'cull-terrain-occ', 'cull-backface']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', applyCullingOptions);
+        });
+    // Apply once at startup with defaults (all on)
+    applyCullingOptions();
+
+    // Expose so applyTerrain can refresh tileset culling after load
+    window.__driveSimApplyCulling = applyCullingOptions;
+    if (vehicle.carEntity && vehicle.carEntity.model) {
+        vehicle.carEntity.model.backFaceCulling = true;
     }
 
     // 5. Main Simulator Loop

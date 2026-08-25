@@ -61,6 +61,17 @@
                 <p class="settings-hint">How often the car re-samples terrain height to stay glued to the ground. Lower = smoother but heavier; higher = lighter but can pop on slopes.</p>
             </div>
 
+            <div class="settings-section" id="culling-section">
+                <h3>Culling (Cesium)</h3>
+                <p class="settings-hint">Techniques that discard geometry outside the view or hidden by terrain/horizon to boost performance.</p>
+                <label class="check-row"><input type="checkbox" id="cull-horizon" checked><span>Horizon Culling</span></label>
+                <label class="check-row"><input type="checkbox" id="cull-frustum" checked><span>Frustum Culling</span></label>
+                <label class="check-row"><input type="checkbox" id="cull-sse" checked><span>Screen Space Error (SSE / LOD)</span></label>
+                <label class="check-row"><input type="checkbox" id="cull-skip-lod" checked><span>Skip Level of Detail</span></label>
+                <label class="check-row"><input type="checkbox" id="cull-terrain-occ" checked><span>Terrain Occlusion</span></label>
+                <label class="check-row"><input type="checkbox" id="cull-backface" checked><span>Back-face Culling</span></label>
+            </div>
+
             <div class="settings-section">
                 <h3>Cesium Ion Access Token</h3>
                 <p class="settings-hint">Required for World Terrain &amp; Google 3D Tiles. Get one at <a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">ion.cesium.com</a>.</p>
@@ -89,6 +100,11 @@
                 <span id="cam-height-value">8 m</span>
             </div>
             <div class="slider-group">
+                <label for="cam-zoom-slider">ZOOM</label>
+                <input type="range" id="cam-zoom-slider" min="8" max="200" step="1" value="25">
+                <span id="cam-zoom-value">25 m</span>
+            </div>
+            <div class="slider-group">
                 <label for="cam-aim-slider">AIM</label>
                 <input type="range" id="cam-aim-slider" min="0" max="100" step="1" value="0">
                 <span id="cam-aim-value">CAR</span>
@@ -104,6 +120,7 @@
                 <span id="render-dist-value">HI</span>
             </div>
             <button id="fov-boost-btn" class="toggle-btn" title="Widen FOV while accelerating">FOV+</button>
+            <button id="orbit-reset-btn" class="toggle-btn" title="Reset camera orbit to follow vehicle">ORBIT</button>
         </div>
 
         <!-- Speed + side action buttons -->

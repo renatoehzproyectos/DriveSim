@@ -106,11 +106,15 @@ class Vehicle {
 
         this._syncEntityVisibility();
 
-        // Camera setup – distance scales with height so vehicle stays centered
+        // Camera setup – distance is independent (ZOOM slider); height offsets pitch
         this.cameraDistance = 25;
         this.cameraHeight = 8;
         // 0 = locked on vehicle, 1 = tilted toward horizon
         this.cameraAimBias = 0;
+        // Orbit offsets (radians). User drag rotates around the vehicle.
+        this.orbitHeadingOffset = 0;
+        this.orbitPitchOffset = 0;
+        this.orbitUserControlled = false; // true while / after user has orbited
         // FOV boost while accelerating
         this.fovBoostEnabled = false;
         this.baseFov = Cesium.Math.toRadians(60);
@@ -270,13 +274,45 @@ class Vehicle {
         this.lon += dLon;
     }
 
+    /** Reset orbital offsets so camera snaps back behind the vehicle. */
+    resetOrbit() {
+        this.orbitHeadingOffset = 0;
+        this.orbitPitchOffset = 0;
+        this.orbitUserControlled = false;
+        this.updateCamera();
+    }
+
+    /**
+     * Apply user orbit delta (radians). Drag on the canvas calls this.
+     * Heading: positive = orbit left of vehicle heading.
+     * Pitch: positive = raise camera (look more down).
+     */
+    applyOrbitDelta(dHeading, dPitch) {
+        this.orbitUserControlled = true;
+        this.orbitHeadingOffset += dHeading;
+        // Keep heading offset in [-PI, PI]
+        while (this.orbitHeadingOffset > Math.PI) this.orbitHeadingOffset -= Math.PI * 2;
+        while (this.orbitHeadingOffset < -Math.PI) this.orbitHeadingOffset += Math.PI * 2;
+        this.orbitPitchOffset = Cesium.Math.clamp(
+            this.orbitPitchOffset + dPitch,
+            Cesium.Math.toRadians(-75),
+            Cesium.Math.toRadians(60)
+        );
+        this.updateCamera();
+    }
+
     updateCamera() {
-        // Distance scales with height so the vehicle stays framed at any zoom.
-        const range = Math.max(15, this.cameraHeight * 2.2 + 10);
+        // ZOOM slider owns range; CAM height still influences base pitch
+        const range = Math.max(8, this.cameraDistance);
         const basePitchDeg = -Math.min(60, 15 + this.cameraHeight * 0.5);
         // AIM bias: 0 = look straight at vehicle, 1 = lift pitch toward horizon + look ahead
         const bias = Cesium.Math.clamp(this.cameraAimBias, 0, 1);
-        const pitch = Cesium.Math.toRadians(basePitchDeg + bias * 28); // raise pitch toward horizon
+        let pitch = Cesium.Math.toRadians(basePitchDeg + bias * 28);
+        // User orbit pitch offset (positive raises the camera)
+        pitch = Cesium.Math.clamp(pitch + this.orbitPitchOffset, Cesium.Math.toRadians(-89), Cesium.Math.toRadians(60));
+
+        // Camera heading = vehicle heading + orbital offset
+        const camHeading = this.heading + this.orbitHeadingOffset;
 
         // Look-at point: blend vehicle position with a point ahead along heading
         // so horizon bias centers the view further down the road
@@ -296,7 +332,7 @@ class Vehicle {
 
         this.viewer.camera.lookAt(
             target,
-            new Cesium.HeadingPitchRange(this.heading, pitch, range)
+            new Cesium.HeadingPitchRange(camHeading, pitch, range)
         );
         this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
