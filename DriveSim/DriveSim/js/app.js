@@ -113,7 +113,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     vehicle.heightSampleIntervalMs = Settings.get().heightSampleMs;
     Settings.initUI({
         onTerrainChange: applyTerrain,
-        onHeightSampleChange: (ms) => { vehicle.heightSampleIntervalMs = ms; }
+        onHeightSampleChange: (ms) => { vehicle.heightSampleIntervalMs = ms; },
+        onVehicleModeChange: (mode) => {
+            vehicle.setMode(mode);
+            controls.setMode(mode);
+        }
     });
     const controls = new Controls();
     const navigation = new Navigation(viewer, vehicle);
@@ -217,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (dt > 0.1) dt = 0.1;
         lastTime = now;
 
-        const input = controls.getInput();
+        const input = vehicle.mode === 'airplane' ? controls.getAirplaneInput() : controls.getInput();
         vehicle.update(dt, input);
         navigation.update();
 

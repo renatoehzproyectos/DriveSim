@@ -707,3 +707,109 @@ body, html {
     min-width: 46px;
     text-align: right;
 }
+
+/* ===================== Airplane Controls (joystick + vertical throttle) ===================== */
+
+#airplane-controls-layer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 35%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 20px 40px;
+    box-sizing: border-box;
+    z-index: 100;
+    pointer-events: none;
+}
+
+#joystick-container {
+    pointer-events: auto;
+    padding: 20px;
+    margin: -20px;
+}
+
+#joystick-base {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    border: 3px solid var(--neon-green);
+    box-shadow: 0 0 20px rgba(0, 255, 102, 0.25), inset 0 0 16px rgba(0, 0, 0, 0.5);
+    position: relative;
+    touch-action: none;
+}
+
+#joystick-knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 64px;
+    height: 64px;
+    margin: -32px 0 0 -32px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #baffd6, var(--neon-green));
+    box-shadow: 0 0 18px var(--neon-green);
+    transition: transform 0.12s ease-out;
+}
+
+#throttle-container {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--glass-bg);
+    border: 1px solid var(--neon-blue);
+    border-radius: 14px;
+    padding: 10px 12px 12px;
+    box-shadow: 0 0 14px rgba(0, 243, 255, 0.2);
+}
+
+.throttle-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--neon-blue);
+    font-weight: 700;
+}
+
+#throttle-track {
+    width: 48px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Rotate a normal horizontal range input into a vertical throttle stick */
+#throttle-slider {
+    width: 150px;
+    height: 40px;
+    transform: rotate(-90deg);
+    accent-color: var(--neon-green);
+}
+
+#throttle-value {
+    font-size: 0.75rem;
+    color: var(--neon-green);
+    font-weight: 700;
+}
+
+@media (max-width: 480px) {
+    #joystick-base {
+        width: 130px;
+        height: 130px;
+    }
+    #joystick-knob {
+        width: 52px;
+        height: 52px;
+        margin: -26px 0 0 -26px;
+    }
+    #throttle-track {
+        height: 130px;
+    }
+    #throttle-slider {
+        width: 122px;
+    }
+}

@@ -40,6 +40,13 @@
                 <label class="radio-row"><input type="radio" name="renderer-mode" value="leaflet"><span>Force Leaflet (Plan B)</span></label>
             </div>
 
+            <div class="settings-section" id="vehicle-section">
+                <h3>Vehicle</h3>
+                <p class="settings-hint">Arcade airplane mode — simple, light flight physics. Not available in Leaflet (Plan B).</p>
+                <label class="radio-row"><input type="radio" name="vehicle-mode" value="car"><span>Car</span></label>
+                <label class="radio-row"><input type="radio" name="vehicle-mode" value="airplane"><span>Airplane</span></label>
+            </div>
+
             <div class="settings-section" id="terrain-section">
                 <h3>Terrain (Cesium)</h3>
                 <label class="radio-row"><input type="radio" name="terrain-mode" value="flat"><span>Flat Terrain</span></label>
@@ -130,7 +137,7 @@
         </div>
     </div>
     
-    <!-- Mobile Controls -->
+    <!-- Mobile Controls (Car) -->
     <div id="controls-layer">
         <div id="steering-container">
             <div id="steering-wheel">
@@ -143,6 +150,23 @@
         <div id="pedals-container">
             <div id="brake-pedal" class="pedal">BRAKE</div>
             <div id="gas-pedal" class="pedal">GAS</div>
+        </div>
+    </div>
+
+    <!-- Mobile Controls (Airplane): joystick (steer + pitch) + vertical throttle slider -->
+    <div id="airplane-controls-layer" class="hidden">
+        <div id="joystick-container">
+            <div id="joystick-base">
+                <div id="joystick-knob"></div>
+            </div>
+        </div>
+
+        <div id="throttle-container">
+            <span class="throttle-label">THR</span>
+            <div id="throttle-track">
+                <input type="range" id="throttle-slider" min="0" max="100" step="1" value="40" orient="vertical">
+            </div>
+            <span id="throttle-value">40%</span>
         </div>
     </div>
 

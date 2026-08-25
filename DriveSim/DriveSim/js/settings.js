@@ -59,8 +59,8 @@ const Settings = (() => {
         }
     }
 
-    /** Wires up the gear button + panel UI. Optional callbacks: onTerrainChange(mode), onHeightSampleChange(ms) */
-    function initUI({ onTerrainChange, onHeightSampleChange } = {}) {
+    /** Wires up the gear button + panel UI. Optional callbacks: onTerrainChange(mode), onHeightSampleChange(ms), onVehicleModeChange(mode) */
+    function initUI({ onTerrainChange, onHeightSampleChange, onVehicleModeChange } = {}) {
         const state = get();
 
         const btn = document.getElementById('settings-btn');
@@ -68,6 +68,8 @@ const Settings = (() => {
         const closeBtn = document.getElementById('settings-close-btn');
         const reloadNote = document.getElementById('settings-reload-note');
         const terrainSection = document.getElementById('terrain-section');
+        const vehicleSection = document.getElementById('vehicle-section');
+        const isCesium = resolveRenderer() === 'cesium';
 
         document.querySelectorAll('input[name="renderer-mode"]').forEach(el => {
             el.checked = el.value === state.renderer;
@@ -86,8 +88,20 @@ const Settings = (() => {
         });
 
         // Terrain only matters when Cesium is actually rendering
-        if (resolveRenderer() !== 'cesium') {
+        if (!isCesium) {
             terrainSection.classList.add('disabled');
+        }
+
+        // Airplane mode is a Cesium-only feature — hide it entirely for Plan B (Leaflet)
+        if (!isCesium) {
+            vehicleSection.classList.add('hidden');
+        } else {
+            document.querySelectorAll('input[name="vehicle-mode"]').forEach(el => {
+                el.checked = el.value === 'car';
+                el.addEventListener('change', () => {
+                    if (typeof onVehicleModeChange === 'function') onVehicleModeChange(el.value);
+                });
+            });
         }
 
         const heightSlider = document.getElementById('height-sample-slider');
