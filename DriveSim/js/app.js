@@ -121,83 +121,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Instantiate Components
     const vehicle = new Vehicle(viewer);
-    vehicle.heightSampleIntervalMs = Settings.get().heightSampleMs;
+    const saved = Settings.get();
+    vehicle.heightSampleIntervalMs = saved.heightSampleMs;
+    vehicle.baseFov = Cesium.Math.toRadians(saved.fovDeg);
+    vehicle.currentFov = vehicle.baseFov;
+    vehicle.followDelayMs = saved.followDelayMs;
+    vehicle.fovBoostEnabled = true; // FOV+ always on
+
+    const controls = new Controls();
+    const navigation = new Navigation(viewer, vehicle);
+
     Settings.initUI({
         onTerrainChange: applyTerrain,
         onHeightSampleChange: (ms) => { vehicle.heightSampleIntervalMs = ms; },
         onVehicleModeChange: (mode) => {
             vehicle.setMode(mode);
             controls.setMode(mode);
+        },
+        onFovChange: (deg) => {
+            vehicle.baseFov = Cesium.Math.toRadians(deg);
+            vehicle.updateCamera();
+        },
+        onFollowDelayChange: (ms) => {
+            vehicle.followDelayMs = ms;
+        },
+        onSseChange: () => {
+            if (typeof window.__driveSimApplyCulling === 'function') {
+                window.__driveSimApplyCulling();
+            }
         }
     });
-    const controls = new Controls();
-    const navigation = new Navigation(viewer, vehicle);
 
-    // 4. Sliders – CAM / ZOOM / AIM / MAP + FOV boost toggle
-    const camSlider = document.getElementById('cam-height-slider');
-    const camValueLabel = document.getElementById('cam-height-value');
-    if (camSlider) {
-        camSlider.value = vehicle.cameraHeight;
-        camValueLabel.textContent = `${vehicle.cameraHeight} m`;
-        camSlider.addEventListener('input', () => {
-            const h = parseFloat(camSlider.value);
-            vehicle.cameraHeight = h;
-            camValueLabel.textContent = `${h} m`;
-            vehicle.updateCamera();
-        });
-    }
-
-    // AIM: 0 = center on car, 100 = center toward horizon
-    const aimSlider = document.getElementById('cam-aim-slider');
-    const aimValueLabel = document.getElementById('cam-aim-value');
-    if (aimSlider) {
-        aimSlider.value = Math.round(vehicle.cameraAimBias * 100);
-        aimValueLabel.textContent = vehicle.cameraAimBias < 0.15 ? 'CAR'
-            : vehicle.cameraAimBias > 0.85 ? 'HORIZON' : `${Math.round(vehicle.cameraAimBias * 100)}%`;
-        aimSlider.addEventListener('input', () => {
-            const v = parseInt(aimSlider.value, 10) / 100;
-            vehicle.cameraAimBias = v;
-            aimValueLabel.textContent = v < 0.15 ? 'CAR' : v > 0.85 ? 'HORIZON' : `${Math.round(v * 100)}%`;
-            vehicle.updateCamera();
-        });
-    }
-
-    // FOV+ toggle: widen FOV while accelerating
-    const fovBtn = document.getElementById('fov-boost-btn');
-    if (fovBtn) {
-        const syncFovBtn = () => {
-            fovBtn.classList.toggle('active', vehicle.fovBoostEnabled);
-            fovBtn.textContent = vehicle.fovBoostEnabled ? 'FOV+ ON' : 'FOV+';
-        };
-        syncFovBtn();
-        fovBtn.addEventListener('click', () => {
-            vehicle.fovBoostEnabled = !vehicle.fovBoostEnabled;
-            syncFovBtn();
-        });
-    }
-
-    // MAP: resolution scale (capped so phones don't go black)
-    const mapSlider = document.getElementById('map-quality-slider');
-    const mapValueLabel = document.getElementById('map-quality-value');
-    if (mapSlider) {
-        const applyMapQuality = (level) => {
-            // Mobile max scale 1.25, desktop up to 1.75
-            const maxScale = isMobile ? 1.25 : 1.75;
-            const scale = 0.6 + (level / 19) * (maxScale - 0.6);
-            viewer.resolutionScale = scale;
-            mapValueLabel.textContent =
-                level >= 17 ? 'ULTRA' : level >= 14 ? 'MAX' : level >= 10 ? 'HI' : level >= 5 ? 'MED' : 'LO';
-        };
-        mapSlider.addEventListener('input', () => {
-            applyMapQuality(parseInt(mapSlider.value, 10));
-        });
-        // Start at HI (not ULTRA) so first load is stable
-        mapSlider.value = 12;
-        applyMapQuality(12);
-    }
-
-
-    // ZOOM: independent camera distance
+    // ZOOM: independent camera distance (CAM / AIM / MAP removed)
     const zoomSlider = document.getElementById('cam-zoom-slider');
     const zoomValueLabel = document.getElementById('cam-zoom-value');
     if (zoomSlider) {
@@ -211,10 +166,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ORBIT: drag on the Cesium canvas to orbit around the vehicle
+    // ORBIT always enabled: drag on the Cesium canvas to orbit around the vehicle
     (function initOrbitControls() {
         const canvas = viewer.scene.canvas;
-        const resetBtn = document.getElementById('orbit-reset-btn');
         let dragging = false;
         let lastX = 0;
         let lastY = 0;
@@ -230,7 +184,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const onDown = (e) => {
             if (isUiTarget(e.target)) return;
-            // Only primary button / single touch
             if (e.pointerType === 'mouse' && e.button !== 0) return;
             dragging = true;
             pointerId = e.pointerId;
@@ -245,13 +198,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dy = e.clientY - lastY;
             lastX = e.clientX;
             lastY = e.clientY;
-            // Sensitivity: ~0.35° per pixel
             const sens = 0.006;
             vehicle.applyOrbitDelta(-dx * sens, -dy * sens);
-            if (resetBtn) {
-                resetBtn.classList.add('active');
-                resetBtn.textContent = 'ORBIT ON';
-            }
             e.preventDefault();
         };
         const onUp = (e) => {
@@ -267,7 +215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.addEventListener('pointerup', onUp, { passive: false });
         window.addEventListener('pointercancel', onUp, { passive: false });
 
-        // Mouse wheel / pinch-like zoom on canvas
+        // Mouse wheel zoom on canvas
         canvas.addEventListener('wheel', (e) => {
             if (isUiTarget(e.target)) return;
             e.preventDefault();
@@ -282,13 +230,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             vehicle.updateCamera();
         }, { passive: false });
 
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
+        // Double-click / double-tap to reset orbit
+        let lastTap = 0;
+        canvas.addEventListener('pointerup', (e) => {
+            if (isUiTarget(e.target)) return;
+            const t = performance.now();
+            if (t - lastTap < 320) {
                 vehicle.resetOrbit();
-                resetBtn.classList.remove('active');
-                resetBtn.textContent = 'ORBIT';
-            });
-        }
+                lastTap = 0;
+            } else {
+                lastTap = t;
+            }
+        });
 
         // Disable Cesium's default camera controller so our lookAt + orbit owns the view
         const ctrl = viewer.scene.screenSpaceCameraController;
@@ -300,6 +253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     })();
 
     // ---- Culling configuration (Cesium) ----
+    // Terrain occlusion option removed; depthTestAgainstTerrain stays on for ground clamping.
     function applyCullingOptions() {
         const scene = viewer.scene;
         const globe = scene.globe;
@@ -307,26 +261,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const frustum = document.getElementById('cull-frustum')?.checked !== false;
         const sse = document.getElementById('cull-sse')?.checked !== false;
         const skipLod = document.getElementById('cull-skip-lod')?.checked !== false;
-        const terrainOcc = document.getElementById('cull-terrain-occ')?.checked !== false;
         const backface = document.getElementById('cull-backface')?.checked !== false;
+        const dynamicSse = document.getElementById('cull-dynamic-sse')?.checked === true;
+        const sseSlider = document.getElementById('sse-slider');
+        const baseSse = sseSlider ? parseFloat(sseSlider.value) : (Settings.get().sseValue || 2);
 
-        // Horizon Culling: discard geometry behind Earth curvature
-        // Cesium enables this by default on the globe; we also gate via show/atmosphere
+        // Keep depth test for accurate sampleHeight ground-clamping
         if (typeof globe.depthTestAgainstTerrain !== 'undefined') {
-            // Terrain Occlusion uses the same depth test path
-            globe.depthTestAgainstTerrain = terrainOcc;
+            globe.depthTestAgainstTerrain = true;
         }
-        // Horizon: when disabled, raise far plane / disable atmosphere fade tricks
-        // Cesium's globe always does horizon culling of tiles; we approximate by
-        // toggling fog/atmosphere which are horizon-aware.
         scene.skyAtmosphere.show = horizon;
         if (scene.fog) {
-            // Keep fog off by default for neon look; horizon still culls tiles
             scene.fog.enabled = false;
         }
 
-        // Frustum Culling: automatic in Cesium; when "off" we widen near/far
-        // so almost everything is inside the frustum (debug-ish).
         const frustumObj = scene.camera.frustum;
         if (frustumObj && frustumObj.near !== undefined) {
             if (frustum) {
@@ -334,22 +282,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 frustumObj.far = 50000000;
             } else {
                 frustumObj.near = 0.1;
-                frustumObj.far = 1e10; // essentially disable by making frustum huge
+                frustumObj.far = 1e10;
             }
         }
 
-        // Screen Space Error / LOD
+        // Effective SSE: base from slider, optionally inflated by speed when Dynamic SSE is on
+        let effectiveSse = baseSse;
+        if (dynamicSse && vehicle) {
+            const speed01 = Math.min(1, Math.abs(vehicle.velocity) / Math.max(1, vehicle.maxSpeed));
+            effectiveSse = baseSse + speed01 * baseSse * 1.5; // up to 2.5× at top speed
+        }
+
         if (sse) {
-            // Balanced default (was previously driven by the FAR slider)
-            if (globe.maximumScreenSpaceError < 0.1 || globe.maximumScreenSpaceError === 0.01) {
-                globe.maximumScreenSpaceError = isMobile ? 1.2 : 1.5;
-            }
+            globe.maximumScreenSpaceError = effectiveSse;
         } else {
-            // Force ultra-high detail (no SSE culling) — heavy
             globe.maximumScreenSpaceError = 0.01;
         }
 
-        // Skip LOD + SSE + backface on Google 3D Tiles (and any future tilesets)
         const applyToTileset = (tileset) => {
             if (!tileset) return;
             tileset.skipLevelOfDetail = skipLod;
@@ -357,49 +306,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             tileset.loadSiblings = !skipLod;
             tileset.skipScreenSpaceErrorFactor = skipLod ? 16 : 0;
             tileset.skipLevels = skipLod ? 1 : 0;
-            // SSE for tiles
             if (!sse) {
                 tileset.maximumScreenSpaceError = 0.01;
-            } else if (tileset.maximumScreenSpaceError < 0.5) {
-                tileset.maximumScreenSpaceError = 16;
+            } else {
+                // Tilesets typically want a higher numeric SSE than the globe
+                tileset.maximumScreenSpaceError = Math.max(4, effectiveSse * 8);
             }
-            // Back-face culling on tileset
             if (tileset.backFaceCulling !== undefined) {
                 tileset.backFaceCulling = backface;
             }
         };
         if (viewer._googleTileset) applyToTileset(viewer._googleTileset);
-        // Also walk primitives for any 3D Tilesets
         const prims = scene.primitives;
         for (let i = 0; i < prims.length; i++) {
             const p = prims.get(i);
             if (p && p.maximumScreenSpaceError !== undefined) applyToTileset(p);
         }
 
-        // Back-face culling on vehicle models (glTF)
-        const setModelBackface = (entity) => {
-            if (entity && entity.model) {
-                entity.model.backFaceCulling = backface;
-            }
-        };
-        setModelBackface(vehicle.carEntity);
-        // Airplane uses boxes (no glTF backface), but keep API consistent
+        if (vehicle.carEntity && vehicle.carEntity.model) {
+            vehicle.carEntity.model.backFaceCulling = backface;
+        }
     }
 
-    // Wire culling checkboxes
-    ['cull-horizon', 'cull-frustum', 'cull-sse', 'cull-skip-lod', 'cull-terrain-occ', 'cull-backface']
+    // Wire culling checkboxes + SSE slider
+    ['cull-horizon', 'cull-frustum', 'cull-sse', 'cull-skip-lod', 'cull-backface', 'cull-dynamic-sse']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', applyCullingOptions);
         });
-    // Apply once at startup with defaults (all on)
+    const sseSliderEl = document.getElementById('sse-slider');
+    if (sseSliderEl) {
+        sseSliderEl.addEventListener('input', applyCullingOptions);
+    }
     applyCullingOptions();
 
-    // Expose so applyTerrain can refresh tileset culling after load
     window.__driveSimApplyCulling = applyCullingOptions;
     if (vehicle.carEntity && vehicle.carEntity.model) {
         vehicle.carEntity.model.backFaceCulling = true;
     }
+
+    // Re-apply dynamic SSE periodically while moving
+    setInterval(() => {
+        if (document.getElementById('cull-dynamic-sse')?.checked) {
+            applyCullingOptions();
+        }
+    }, 500);
 
     // 5. Main Simulator Loop
     let lastTime = performance.now();

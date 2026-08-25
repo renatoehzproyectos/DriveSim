@@ -47,6 +47,22 @@
                 <label class="radio-row"><input type="radio" name="vehicle-mode" value="airplane"><span>Airplane</span></label>
             </div>
 
+            <div class="settings-section" id="camera-section">
+                <h3>Camera</h3>
+                <div class="settings-slider-row">
+                    <label for="fov-slider">FOV</label>
+                    <input type="range" id="fov-slider" min="40" max="100" step="1" value="60">
+                    <span id="fov-value">60°</span>
+                </div>
+                <p class="settings-hint">Base field of view. FOV+ still widens while accelerating.</p>
+                <div class="settings-slider-row">
+                    <label for="follow-delay-slider">Follow delay</label>
+                    <input type="range" id="follow-delay-slider" min="0" max="1000" step="25" value="0">
+                    <span id="follow-delay-value">0 ms</span>
+                </div>
+                <p class="settings-hint">Lag on turn / rotate / pitch only. Distance (zoom) stays instant.</p>
+            </div>
+
             <div class="settings-section" id="terrain-section">
                 <h3>Terrain (Cesium)</h3>
                 <label class="radio-row"><input type="radio" name="terrain-mode" value="flat"><span>Flat Terrain</span></label>
@@ -67,8 +83,14 @@
                 <label class="check-row"><input type="checkbox" id="cull-horizon" checked><span>Horizon Culling</span></label>
                 <label class="check-row"><input type="checkbox" id="cull-frustum" checked><span>Frustum Culling</span></label>
                 <label class="check-row"><input type="checkbox" id="cull-sse" checked><span>Screen Space Error (SSE / LOD)</span></label>
+                <label class="check-row"><input type="checkbox" id="cull-dynamic-sse"><span>Dynamic SSE</span></label>
+                <div class="settings-slider-row">
+                    <label for="sse-slider">SSE value</label>
+                    <input type="range" id="sse-slider" min="0.5" max="32" step="0.5" value="2">
+                    <span id="sse-value">2.0</span>
+                </div>
+                <p class="settings-hint">Higher SSE = coarser LOD (faster). Dynamic SSE raises it when moving fast.</p>
                 <label class="check-row"><input type="checkbox" id="cull-skip-lod" checked><span>Skip Level of Detail</span></label>
-                <label class="check-row"><input type="checkbox" id="cull-terrain-occ" checked><span>Terrain Occlusion</span></label>
                 <label class="check-row"><input type="checkbox" id="cull-backface" checked><span>Back-face Culling</span></label>
             </div>
 
@@ -92,37 +114,19 @@
     
     <!-- UI Overlays -->
     <div id="ui-layer">
-        <!-- Camera + quality controls (top-left) -->
+        <!-- Camera + quality controls (top-left) — ZOOM only -->
         <div id="left-controls">
-            <div class="slider-group">
-                <label for="cam-height-slider">CAM</label>
-                <input type="range" id="cam-height-slider" min="3" max="80" step="1" value="8">
-                <span id="cam-height-value">8 m</span>
-            </div>
             <div class="slider-group">
                 <label for="cam-zoom-slider">ZOOM</label>
                 <input type="range" id="cam-zoom-slider" min="8" max="200" step="1" value="25">
                 <span id="cam-zoom-value">25 m</span>
             </div>
-            <div class="slider-group">
-                <label for="cam-aim-slider">AIM</label>
-                <input type="range" id="cam-aim-slider" min="0" max="100" step="1" value="0">
-                <span id="cam-aim-value">CAR</span>
-            </div>
-            <div class="slider-group">
-                <label for="map-quality-slider">MAP</label>
-                <input type="range" id="map-quality-slider" min="1" max="19" step="1" value="18">
-                <span id="map-quality-value">HI</span>
-            </div>
-            <button id="fov-boost-btn" class="toggle-btn" title="Widen FOV while accelerating">FOV+</button>
-            <button id="orbit-reset-btn" class="toggle-btn" title="Reset camera orbit to follow vehicle">ORBIT</button>
         </div>
 
         <!-- Speed + side action buttons -->
         <div id="top-hud">
             <div id="side-btns-left">
-                <button id="route-btn" title="Create driving route">ROUTE</button>
-                <button id="gps-toggle-btn" title="Track your real GPS position with ultra accuracy">GPS ON</button>
+                <!-- ROUTE / GPS always-on; no toggle buttons -->
             </div>
 
             <div id="speedometer">
@@ -138,7 +142,7 @@
         
         <!-- Destination Search -->
         <div id="search-container">
-            <input type="text" id="dest-input" placeholder="Address, city or lat, lon" autocomplete="off" enterkeyhint="go">
+            <input type="text" id="dest-input" placeholder="Address, city or lat, lon (Enter = route)" autocomplete="off" enterkeyhint="go">
             <div id="gps-status" class="hidden">
                 <span id="gps-accuracy">—</span>
             </div>

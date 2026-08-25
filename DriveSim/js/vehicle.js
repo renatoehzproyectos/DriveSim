@@ -115,12 +115,19 @@ class Vehicle {
         this.orbitHeadingOffset = 0;
         this.orbitPitchOffset = 0;
         this.orbitUserControlled = false; // true while / after user has orbited
-        // FOV boost while accelerating
-        this.fovBoostEnabled = false;
+        // FOV boost while accelerating (always on)
+        this.fovBoostEnabled = true;
         this.baseFov = Cesium.Math.toRadians(60);
         this.maxFovBoost = Cesium.Math.toRadians(18); // up to ~78° when full throttle
         this.currentFov = this.baseFov;
         this._accelerating = false;
+
+        // Camera follow lag (ms) — only on heading/pitch, not distance
+        this.followDelayMs = 0;
+        this._smoothHeading = this.heading;
+        this._smoothOrbitHeading = 0;
+        this._smoothOrbitPitch = 0;
+        this._lastCamUpdateTime = performance.now();
 
         // Ground-clamping: periodically re-sample terrain/3D-tiles height,
         // then smoothly TWEEN toward it every frame instead of snapping.
@@ -279,6 +286,8 @@ class Vehicle {
         this.orbitHeadingOffset = 0;
         this.orbitPitchOffset = 0;
         this.orbitUserControlled = false;
+        this._smoothOrbitHeading = 0;
+        this._smoothOrbitPitch = 0;
         this.updateCamera();
     }
 
@@ -302,25 +311,45 @@ class Vehicle {
     }
 
     updateCamera() {
-        // ZOOM slider owns range; CAM height still influences base pitch
+        // ZOOM owns range; fixed height/aim defaults (sliders removed)
         const range = Math.max(8, this.cameraDistance);
         const basePitchDeg = -Math.min(60, 15 + this.cameraHeight * 0.5);
-        // AIM bias: 0 = look straight at vehicle, 1 = lift pitch toward horizon + look ahead
         const bias = Cesium.Math.clamp(this.cameraAimBias, 0, 1);
+
+        // Follow delay: smooth only heading / orbit / pitch — distance is instant
+        const now = performance.now();
+        const dt = Math.min(0.1, Math.max(0.001, (now - this._lastCamUpdateTime) / 1000));
+        this._lastCamUpdateTime = now;
+        const delaySec = Math.max(0, this.followDelayMs) / 1000;
+        // alpha ≈ 1 when delay is 0; slower approach as delay grows
+        const alpha = delaySec <= 0.001 ? 1 : Math.min(1, dt / delaySec);
+
+        // Smooth vehicle heading (shortest-path wrap)
+        let dHead = this.heading - this._smoothHeading;
+        while (dHead > Math.PI) dHead -= Math.PI * 2;
+        while (dHead < -Math.PI) dHead += Math.PI * 2;
+        this._smoothHeading += dHead * alpha;
+        while (this._smoothHeading > Math.PI) this._smoothHeading -= Math.PI * 2;
+        while (this._smoothHeading < -Math.PI) this._smoothHeading += Math.PI * 2;
+
+        this._smoothOrbitHeading += (this.orbitHeadingOffset - this._smoothOrbitHeading) * alpha;
+        this._smoothOrbitPitch += (this.orbitPitchOffset - this._smoothOrbitPitch) * alpha;
+
         let pitch = Cesium.Math.toRadians(basePitchDeg + bias * 28);
-        // User orbit pitch offset (positive raises the camera)
-        pitch = Cesium.Math.clamp(pitch + this.orbitPitchOffset, Cesium.Math.toRadians(-89), Cesium.Math.toRadians(60));
+        pitch = Cesium.Math.clamp(
+            pitch + this._smoothOrbitPitch,
+            Cesium.Math.toRadians(-89),
+            Cesium.Math.toRadians(60)
+        );
 
-        // Camera heading = vehicle heading + orbital offset
-        const camHeading = this.heading + this.orbitHeadingOffset;
+        const camHeading = this._smoothHeading + this._smoothOrbitHeading;
 
-        // Look-at point: blend vehicle position with a point ahead along heading
-        // so horizon bias centers the view further down the road
+        // Look-at uses live vehicle position (no lag on distance / position)
         let target = this.position;
         if (bias > 0.001) {
             const metersPerDegreeLat = 111111;
             const metersPerDegreeLon = 111111 * Math.cos(Cesium.Math.toRadians(this.lat));
-            const lookAhead = bias * (range * 0.55 + 12); // meters forward
+            const lookAhead = bias * (range * 0.55 + 12);
             const dLat = (Math.cos(this.heading) * lookAhead) / metersPerDegreeLat;
             const dLon = (Math.sin(this.heading) * lookAhead) / metersPerDegreeLon;
             target = Cesium.Cartesian3.fromDegrees(
@@ -336,12 +365,11 @@ class Vehicle {
         );
         this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
-        // Dynamic FOV: widen while accelerating when FOV+ is on
+        // Dynamic FOV: always enabled (FOV+ permanently on)
         const wantBoost = this.fovBoostEnabled && this._accelerating && this.velocity > 1;
         const targetFov = wantBoost
             ? this.baseFov + this.maxFovBoost * Math.min(1, this.velocity / this.maxSpeed)
             : this.baseFov;
-        // Smooth lerp so it doesn't snap
         this.currentFov += (targetFov - this.currentFov) * 0.08;
         this.viewer.camera.frustum.fov = this.currentFov;
     }

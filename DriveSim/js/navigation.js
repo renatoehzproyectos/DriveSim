@@ -69,20 +69,17 @@ class Navigation {
 
     initSearchUI() {
         const input = document.getElementById('dest-input');
-        const routeBtn = document.getElementById('route-btn');
         const teleportBtn = document.getElementById('teleport-btn');
 
         const handleQuery = async (mode) => {
             const query = input.value.trim();
             if (!query) return;
 
-            // Show loading state
-            const originalRouteText = routeBtn.textContent;
-            const originalTeleportText = teleportBtn.textContent;
-            routeBtn.disabled = true;
-            teleportBtn.disabled = true;
-            if (mode === 'route') routeBtn.textContent = '...';
-            else teleportBtn.textContent = '...';
+            const originalTeleportText = teleportBtn ? teleportBtn.textContent : '';
+            if (teleportBtn) {
+                teleportBtn.disabled = true;
+                if (mode === 'teleport') teleportBtn.textContent = '...';
+            }
 
             try {
                 const coords = await this.resolveQuery(query);
@@ -96,22 +93,23 @@ class Navigation {
                 } else {
                     this.clearRoute();
                     this.vehicle.teleport(coords.lon, coords.lat);
-                    // Update minimap immediately
                     this.map.setView([coords.lat, coords.lon], 16);
                 }
             } catch (err) {
                 console.error(err);
                 alert('Error looking up location');
             } finally {
-                routeBtn.disabled = false;
-                teleportBtn.disabled = false;
-                routeBtn.textContent = originalRouteText;
-                teleportBtn.textContent = originalTeleportText;
+                if (teleportBtn) {
+                    teleportBtn.disabled = false;
+                    teleportBtn.textContent = originalTeleportText;
+                }
             }
         };
 
-        routeBtn.addEventListener('click', () => handleQuery('route'));
-        teleportBtn.addEventListener('click', () => handleQuery('teleport'));
+        // ROUTE is always available via Enter in the search box (and minimap click)
+        if (teleportBtn) {
+            teleportBtn.addEventListener('click', () => handleQuery('teleport'));
+        }
 
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -274,49 +272,41 @@ class Navigation {
     // ─── Device Geolocation (ultra-high accuracy) ───────────────────────────
 
     initGpsUI() {
-        const toggleBtn = document.getElementById('gps-toggle-btn');
         const teleportBtn = document.getElementById('gps-teleport-btn');
         const statusEl = document.getElementById('gps-status');
-        const accuracyEl = document.getElementById('gps-accuracy');
 
-        if (!toggleBtn || !teleportBtn) return;
-
-        if (!navigator.geolocation) {
-            toggleBtn.textContent = 'NO GPS';
-            toggleBtn.disabled = true;
-            return;
+        if (teleportBtn) {
+            teleportBtn.addEventListener('click', () => {
+                this.teleportToDevice();
+            });
         }
 
-        toggleBtn.addEventListener('click', () => {
-            if (this.gpsActive) {
-                this.stopGps();
-            } else {
-                this.startGps();
+        // GPS always enabled — start tracking as soon as possible
+        if (!navigator.geolocation) {
+            if (statusEl) {
+                statusEl.classList.remove('hidden');
+                const accuracyEl = document.getElementById('gps-accuracy');
+                if (accuracyEl) accuracyEl.textContent = 'NO GPS';
             }
-        });
-
-        teleportBtn.addEventListener('click', () => {
-            this.teleportToDevice();
-        });
+            return;
+        }
+        this.startGps();
     }
 
     startGps() {
-        const toggleBtn = document.getElementById('gps-toggle-btn');
+        if (this.gpsActive) return;
         const teleportBtn = document.getElementById('gps-teleport-btn');
         const statusEl = document.getElementById('gps-status');
         const accuracyEl = document.getElementById('gps-accuracy');
 
-        // Ultra precision options
         const options = {
-            enableHighAccuracy: true,   // force GPS chip / best sensors
-            maximumAge: 0,              // never use cached position
-            timeout: 15000              // wait up to 15s for a fix
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 15000
         };
 
-        toggleBtn.textContent = 'LOCATING…';
-        toggleBtn.classList.add('active');
-        statusEl.classList.remove('hidden');
-        accuracyEl.textContent = 'acquiring…';
+        if (statusEl) statusEl.classList.remove('hidden');
+        if (accuracyEl) accuracyEl.textContent = 'acquiring…';
 
         // Continuous watch for live tracking
         this.gpsWatchId = navigator.geolocation.watchPosition(
@@ -355,14 +345,11 @@ class Navigation {
             this.deviceEntityCesium = null;
         }
 
-        const toggleBtn = document.getElementById('gps-toggle-btn');
         const teleportBtn = document.getElementById('gps-teleport-btn');
         const statusEl = document.getElementById('gps-status');
 
-        toggleBtn.textContent = 'GPS ON';
-        toggleBtn.classList.remove('active');
-        teleportBtn.disabled = true;
-        statusEl.classList.add('hidden');
+        if (teleportBtn) teleportBtn.disabled = true;
+        if (statusEl) statusEl.classList.add('hidden');
     }
 
     onGpsSuccess(pos) {
@@ -373,13 +360,10 @@ class Navigation {
         this.gpsHeading = (heading != null && !isNaN(heading)) ? heading : null;
 
         // Update UI
-        const toggleBtn = document.getElementById('gps-toggle-btn');
         const teleportBtn = document.getElementById('gps-teleport-btn');
         const accuracyEl = document.getElementById('gps-accuracy');
 
-        toggleBtn.textContent = 'GPS LIVE';
-        toggleBtn.classList.add('active');
-        teleportBtn.disabled = false;
+        if (teleportBtn) teleportBtn.disabled = false;
 
         // Accuracy display – celebrate when it's excellent
         let label;

@@ -3,13 +3,18 @@
  * - Renderer: auto | cesium | leaflet  (Leaflet = Plan B fallback)
  * - Terrain (Cesium only): flat | worldterrain | google3d
  * - Cesium ion access token, persisted to localStorage
+ * - Camera FOV, follow delay, SSE
  */
 const Settings = (() => {
     const KEYS = {
         renderer: 'ds:renderer',
         terrain: 'ds:terrain',
         ionToken: 'ds:ionToken',
-        heightSampleMs: 'ds:heightSampleMs'
+        heightSampleMs: 'ds:heightSampleMs',
+        fovDeg: 'ds:fovDeg',
+        followDelayMs: 'ds:followDelayMs',
+        sseValue: 'ds:sseValue',
+        dynamicSse: 'ds:dynamicSse'
     };
 
     function get() {
@@ -17,7 +22,11 @@ const Settings = (() => {
             renderer: localStorage.getItem(KEYS.renderer) || 'auto',
             terrain: localStorage.getItem(KEYS.terrain) || 'flat',
             ionToken: localStorage.getItem(KEYS.ionToken) || '',
-            heightSampleMs: parseInt(localStorage.getItem(KEYS.heightSampleMs), 10) || 200
+            heightSampleMs: parseInt(localStorage.getItem(KEYS.heightSampleMs), 10) || 200,
+            fovDeg: parseFloat(localStorage.getItem(KEYS.fovDeg)) || 60,
+            followDelayMs: parseInt(localStorage.getItem(KEYS.followDelayMs), 10) || 0,
+            sseValue: parseFloat(localStorage.getItem(KEYS.sseValue)) || 2,
+            dynamicSse: localStorage.getItem(KEYS.dynamicSse) === '1'
         };
     }
 
@@ -26,6 +35,10 @@ const Settings = (() => {
         if (partial.terrain !== undefined) localStorage.setItem(KEYS.terrain, partial.terrain);
         if (partial.ionToken !== undefined) localStorage.setItem(KEYS.ionToken, partial.ionToken);
         if (partial.heightSampleMs !== undefined) localStorage.setItem(KEYS.heightSampleMs, String(partial.heightSampleMs));
+        if (partial.fovDeg !== undefined) localStorage.setItem(KEYS.fovDeg, String(partial.fovDeg));
+        if (partial.followDelayMs !== undefined) localStorage.setItem(KEYS.followDelayMs, String(partial.followDelayMs));
+        if (partial.sseValue !== undefined) localStorage.setItem(KEYS.sseValue, String(partial.sseValue));
+        if (partial.dynamicSse !== undefined) localStorage.setItem(KEYS.dynamicSse, partial.dynamicSse ? '1' : '0');
     }
 
     /** Rough heuristic for "bad device" that should not run Cesium 3D globe rendering */
@@ -59,8 +72,19 @@ const Settings = (() => {
         }
     }
 
-    /** Wires up the gear button + panel UI. Optional callbacks: onTerrainChange(mode), onHeightSampleChange(ms), onVehicleModeChange(mode) */
-    function initUI({ onTerrainChange, onHeightSampleChange, onVehicleModeChange } = {}) {
+    /**
+     * Wires up the gear button + panel UI.
+     * Optional callbacks: onTerrainChange, onHeightSampleChange, onVehicleModeChange,
+     * onFovChange, onFollowDelayChange, onSseChange
+     */
+    function initUI({
+        onTerrainChange,
+        onHeightSampleChange,
+        onVehicleModeChange,
+        onFovChange,
+        onFollowDelayChange,
+        onSseChange
+    } = {}) {
         const state = get();
 
         const btn = document.getElementById('settings-btn');
@@ -114,6 +138,56 @@ const Settings = (() => {
                 heightValueLabel.textContent = `${ms} ms`;
                 set({ heightSampleMs: ms });
                 if (typeof onHeightSampleChange === 'function') onHeightSampleChange(ms);
+            });
+        }
+
+        // FOV slider
+        const fovSlider = document.getElementById('fov-slider');
+        const fovValueLabel = document.getElementById('fov-value');
+        if (fovSlider) {
+            fovSlider.value = state.fovDeg;
+            fovValueLabel.textContent = `${Math.round(state.fovDeg)}°`;
+            fovSlider.addEventListener('input', () => {
+                const deg = parseFloat(fovSlider.value);
+                fovValueLabel.textContent = `${Math.round(deg)}°`;
+                set({ fovDeg: deg });
+                if (typeof onFovChange === 'function') onFovChange(deg);
+            });
+        }
+
+        // Follow delay slider
+        const followSlider = document.getElementById('follow-delay-slider');
+        const followValueLabel = document.getElementById('follow-delay-value');
+        if (followSlider) {
+            followSlider.value = state.followDelayMs;
+            followValueLabel.textContent = `${state.followDelayMs} ms`;
+            followSlider.addEventListener('input', () => {
+                const ms = parseInt(followSlider.value, 10);
+                followValueLabel.textContent = `${ms} ms`;
+                set({ followDelayMs: ms });
+                if (typeof onFollowDelayChange === 'function') onFollowDelayChange(ms);
+            });
+        }
+
+        // SSE slider + dynamic toggle (wired primarily in app.js via onSseChange)
+        const sseSlider = document.getElementById('sse-slider');
+        const sseValueLabel = document.getElementById('sse-value');
+        const dynamicSseEl = document.getElementById('cull-dynamic-sse');
+        if (sseSlider) {
+            sseSlider.value = state.sseValue;
+            sseValueLabel.textContent = state.sseValue.toFixed(1);
+            sseSlider.addEventListener('input', () => {
+                const v = parseFloat(sseSlider.value);
+                sseValueLabel.textContent = v.toFixed(1);
+                set({ sseValue: v });
+                if (typeof onSseChange === 'function') onSseChange();
+            });
+        }
+        if (dynamicSseEl) {
+            dynamicSseEl.checked = state.dynamicSse;
+            dynamicSseEl.addEventListener('change', () => {
+                set({ dynamicSse: dynamicSseEl.checked });
+                if (typeof onSseChange === 'function') onSseChange();
             });
         }
 
