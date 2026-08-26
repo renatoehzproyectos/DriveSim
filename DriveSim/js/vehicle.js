@@ -383,28 +383,55 @@ class Vehicle {
      * Excludes our own entities so the vehicle never mistakes its own
      * model/wings for terrain (that ratcheting bug caused the "balloon" drift).
      * Result is stored as a target and smoothly tweened in update().
+     *
+     * IMPORTANT: scene.sampleHeight() is SYNCHRONOUS and, on 3D Tiles, forces an
+     * immediate tile load — it can block the main thread for tens of milliseconds.
+     * Since that block happens inside the same rAF tick that measures dt for physics,
+     * it inflates dt for that one frame and the car visibly lurches/shakes every
+     * heightSampleIntervalMs. We use the async sampleHeightMostDetailed() instead for
+     * periodic sampling, which never blocks the frame. teleport() still uses the sync
+     * path (immediate=true) since it needs the height to be correct on the same tick.
      */
-    sampleGroundHeight() {
+    sampleGroundHeight(immediate = false) {
         if (this._heightSampling) return;
         const scene = this.viewer.scene;
-        if (!scene || typeof scene.sampleHeight !== 'function' || !scene.sampleHeightSupported) return;
+        if (!scene || !scene.sampleHeightSupported) return;
+        const carto = Cesium.Cartographic.fromDegrees(this.lon, this.lat);
 
+        if (!immediate && typeof scene.sampleHeightMostDetailed === 'function') {
+            this._heightSampling = true;
+            scene.sampleHeightMostDetailed([carto], this._selfEntities)
+                .then((results) => {
+                    const h = results && results[0] && results[0].height;
+                    this._applySampledHeight(h);
+                })
+                .catch(() => { /* transient while tiles load — ignore */ })
+                .finally(() => { this._heightSampling = false; });
+            return;
+        }
+
+        // Synchronous fallback: used for teleport() (needs an instant, same-tick answer)
+        // and for renderers/terrain without the async sampler.
+        if (typeof scene.sampleHeight !== 'function') return;
         this._heightSampling = true;
         try {
-            const carto = Cesium.Cartographic.fromDegrees(this.lon, this.lat);
             const h = scene.sampleHeight(carto, this._selfEntities);
-            if (typeof h === 'number' && isFinite(h)) {
-                this.groundHeightTarget = h;
-                if (!this._groundSampleValid) {
-                    // First sample: snap immediately instead of tweening from 0
-                    this.groundHeight = h;
-                    this._groundSampleValid = true;
-                }
-            }
+            this._applySampledHeight(h);
         } catch (e) {
             // Sampling can fail transiently while tiles are still loading — ignore.
         } finally {
             this._heightSampling = false;
+        }
+    }
+
+    _applySampledHeight(h) {
+        if (typeof h === 'number' && isFinite(h)) {
+            this.groundHeightTarget = h;
+            if (!this._groundSampleValid) {
+                // First sample: snap immediately instead of tweening from 0
+                this.groundHeight = h;
+                this._groundSampleValid = true;
+            }
         }
     }
 
@@ -416,7 +443,7 @@ class Vehicle {
         this.planeSpeed = this.planeMinSpeed;
         this.position = Cesium.Cartesian3.fromDegrees(this.lon, this.lat, this.height);
         this.updateCamera();
-        this.sampleGroundHeight();
+        this.sampleGroundHeight(true);
         // Snap the smoothed ground estimate too, otherwise teleporting across
         // very different terrain would tween in from the old height.
         this.groundHeight = this.groundHeightTarget;

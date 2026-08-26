@@ -460,9 +460,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         vehicle.carEntity.model.backFaceCulling = true;
     }
 
-    // Re-apply dynamic SSE periodically while moving
+    // Re-apply dynamic SSE periodically while moving — but only when it actually
+    // changed enough to matter. Reapplying on every tick churns tileset LOD (geometry
+    // refines/coarsens under the car), which can nudge the sampled ground height and
+    // add to the "shaky" feeling on top of the frame-timing fix above.
+    let lastDynamicSseValue = null;
     setInterval(() => {
-        if (document.getElementById('cull-dynamic-sse')?.checked) {
+        if (!document.getElementById('cull-dynamic-sse')?.checked) return;
+        const sseSlider = document.getElementById('sse-slider');
+        const baseSse = sseSlider ? parseFloat(sseSlider.value) : (Settings.get().sseValue || 2);
+        const speed01 = Math.min(1, Math.abs(vehicle.velocity) / Math.max(1, vehicle.maxSpeed));
+        const effectiveSse = baseSse + speed01 * baseSse * 1.5;
+        if (lastDynamicSseValue === null || Math.abs(effectiveSse - lastDynamicSseValue) > baseSse * 0.15) {
+            lastDynamicSseValue = effectiveSse;
             applyCullingOptions();
         }
     }, 500);
@@ -526,7 +536,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function simLoop(now) {
         let dt = (now - lastTime) / 1000;
-        if (dt > 0.1) dt = 0.1;
+        // Clamp hard: a stalled/slow frame should never let the car teleport forward.
+        // At 200 km/h (55.6 m/s), even 0.1s of clamp allowed a ~5.6m lurch; 0.05s halves that.
+        if (dt > 0.05) dt = 0.05;
         lastTime = now;
 
         const input = vehicle.mode === 'airplane' ? controls.getAirplaneInput() : controls.getInput();
