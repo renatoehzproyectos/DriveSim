@@ -73,6 +73,48 @@ document.addEventListener('DOMContentLoaded', async () => {
         imageryLayer = viewer.imageryLayers.addImageryProvider(fallback);
     }
 
+    // 2a. Centralized Google 3D Tiles performance configuration.
+    // Applies the new opt-in streaming/LOD features from Settings, guarded so an
+    // unavailable property on a given Cesium build never throws (see Settings.get()).
+    function configurePhotorealisticTileset(tileset) {
+        if (!tileset) return;
+        const s = Settings.get();
+
+        if ('dynamicScreenSpaceError' in tileset) {
+            tileset.dynamicScreenSpaceError = !!s.nativeDynamicSse;
+            if (s.nativeDynamicSse) {
+                tileset.dynamicScreenSpaceErrorDensity = 2.0e-4;
+                tileset.dynamicScreenSpaceErrorFactor = s.nativeDynamicSseFactor;
+                tileset.dynamicScreenSpaceErrorHeightFalloff = 0.25;
+            }
+        }
+
+        if ('foveatedScreenSpaceError' in tileset) {
+            tileset.foveatedScreenSpaceError = !!s.foveated;
+            if (s.foveated) {
+                tileset.foveatedTimeDelay = s.foveatedDelay;
+            }
+        }
+
+        if ('cullRequestsWhileMoving' in tileset) {
+            tileset.cullRequestsWhileMoving = !!s.requestCulling;
+            if (s.requestCulling && 'cullRequestsWhileMovingMultiplier' in tileset) {
+                tileset.cullRequestsWhileMovingMultiplier = s.requestCullingMultiplier;
+            }
+        }
+
+        if ('progressiveResolutionHeightFraction' in tileset) {
+            tileset.progressiveResolutionHeightFraction = s.progressiveResolution
+                ? s.progressiveResolutionFraction
+                : 0;
+        }
+
+        if ('preloadFlightDestinations' in tileset) {
+            tileset.preloadFlightDestinations = !!s.preloadFlightDest;
+        }
+    }
+    window.__driveSimConfigurePhotorealisticTileset = configurePhotorealisticTileset;
+
     // 2b. Terrain mode: flat | worldterrain | google3d (switchable live from Settings)
     async function applyTerrain(mode) {
         if (viewer._googleTileset) {
@@ -98,6 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tileset.skipLevels = 1;
                 tileset.maximumScreenSpaceError = 16;
                 if (tileset.backFaceCulling !== undefined) tileset.backFaceCulling = true;
+                configurePhotorealisticTileset(tileset);
                 viewer.scene.primitives.add(tileset);
                 viewer._googleTileset = tileset;
                 viewer.scene.globe.show = false;
@@ -164,7 +207,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 window.__driveSimApplyCulling();
             }
         },
-        onMapQualityChange: applyMapQuality
+        onMapQualityChange: applyMapQuality,
+        onStreamingChange: () => {
+            if (viewer._googleTileset) configurePhotorealisticTileset(viewer._googleTileset);
+        },
+        onAdaptivePerformanceChange: (enabled) => {
+            adaptivePerfEnabled = enabled;
+            if (!enabled) {
+                // Restore the user's manually-selected MAP quality when turning adaptive off
+                applyMapQuality(Settings.get().mapQuality || 12);
+            }
+        }
     });
 
     // ZOOM: independent camera distance (CAM / AIM removed; MAP lives in Settings)
@@ -367,6 +420,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 500);
 
+    // ---- Request Culling While Moving: adapt multiplier by speed band (coarse, not per-frame) ----
+    let lastCullBand = null;
+    setInterval(() => {
+        const s = Settings.get();
+        if (!s.requestCulling || !viewer._googleTileset) return;
+        const speed01 = Math.min(1, Math.abs(vehicle.velocity) / Math.max(1, vehicle.maxSpeed));
+        const band = speed01 < 0.33 ? 60 : speed01 < 0.66 ? 75 : 90;
+        if (band !== lastCullBand) {
+            lastCullBand = band;
+            if ('cullRequestsWhileMovingMultiplier' in viewer._googleTileset) {
+                viewer._googleTileset.cullRequestsWhileMovingMultiplier = band;
+            }
+            // Keep the settings panel slider/value in sync, without persisting the manual choice
+            const el = document.getElementById('request-culling-slider');
+            const label = document.getElementById('request-culling-value');
+            if (el) el.value = band;
+            if (label) label.textContent = String(band);
+        }
+    }, 800);
+
+    // ---- Adaptive Performance Controller: FPS-driven MAP quality tiers with hysteresis ----
+    let adaptivePerfEnabled = Settings.get().adaptivePerformance;
+    const QUALITY_TIERS = [
+        { name: 'EMERGENCY', level: 3, lowerFps: 0, upperFps: 25 },
+        { name: 'PERFORMANCE', level: 7, lowerFps: 20, upperFps: 32 },
+        { name: 'BALANCED', level: 11, lowerFps: 27, upperFps: 42 },
+        { name: 'HIGH', level: 15, lowerFps: 37, upperFps: 52 },
+        { name: 'ULTRA', level: 19, lowerFps: 47, upperFps: 999 }
+    ];
+    let perfTierIndex = 2; // start at BALANCED
+    let perfCooldownUntil = 0;
+    let fpsSamples = [];
+    function updateAdaptivePerformance(now, dt) {
+        if (!adaptivePerfEnabled || dt <= 0) return;
+        fpsSamples.push(1 / dt);
+        if (fpsSamples.length > 60) fpsSamples.shift();
+        if (now < perfCooldownUntil || fpsSamples.length < 30) return;
+
+        const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length;
+        const tier = QUALITY_TIERS[perfTierIndex];
+        let nextIndex = perfTierIndex;
+        if (avgFps < tier.lowerFps && perfTierIndex > 0) {
+            nextIndex = perfTierIndex - 1; // drop a tier
+        } else if (avgFps > tier.upperFps && perfTierIndex < QUALITY_TIERS.length - 1) {
+            nextIndex = perfTierIndex + 1; // raise a tier
+        }
+        if (nextIndex !== perfTierIndex) {
+            perfTierIndex = nextIndex;
+            applyMapQuality(QUALITY_TIERS[perfTierIndex].level);
+            perfCooldownUntil = now + 1500; // 1.5s cooldown to avoid oscillation
+            fpsSamples = [];
+        }
+    }
+
     // 5. Main Simulator Loop
     let lastTime = performance.now();
 
@@ -378,6 +485,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const input = vehicle.mode === 'airplane' ? controls.getAirplaneInput() : controls.getInput();
         vehicle.update(dt, input);
         navigation.update();
+        updateAdaptivePerformance(now, dt);
 
         requestAnimationFrame(simLoop);
     }

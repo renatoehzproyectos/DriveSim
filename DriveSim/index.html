@@ -104,6 +104,49 @@
                 <label class="check-row"><input type="checkbox" id="cull-backface" checked><span>Back-face Culling</span></label>
             </div>
 
+            <div class="settings-section" id="streaming-section">
+                <h3>Streaming &amp; Adaptive (Cesium)</h3>
+                <p class="settings-hint">3D Tiles streaming/LOD optimizations. Guarded for Cesium 1.120 — features unavailable in your Cesium build are silently skipped.</p>
+
+                <label class="check-row"><input type="checkbox" id="native-dynamic-sse"><span>Native Dynamic Screen Space Error</span></label>
+                <div class="settings-slider-row">
+                    <label for="native-dynamic-sse-factor-slider">Dynamic SSE factor</label>
+                    <input type="range" id="native-dynamic-sse-factor-slider" min="4" max="48" step="1" value="24">
+                    <span id="native-dynamic-sse-factor-value">24</span>
+                </div>
+                <p class="settings-hint">Cesium's built-in tileset.dynamicScreenSpaceError. Reduces distant geometry detail near the ground — useful at street level. Works alongside the custom Dynamic SSE above; disable one if they fight each other.</p>
+
+                <label class="check-row"><input type="checkbox" id="foveated-loading"><span>Foveated Tile Loading</span></label>
+                <div class="settings-slider-row">
+                    <label for="foveated-delay-slider">Foveated delay</label>
+                    <input type="range" id="foveated-delay-slider" min="0.05" max="0.35" step="0.01" value="0.15">
+                    <span id="foveated-delay-value">0.15s</span>
+                </div>
+                <p class="settings-hint">Prioritizes tiles in front of the vehicle over peripheral/rear tiles while moving.</p>
+
+                <label class="check-row"><input type="checkbox" id="request-culling"><span>Cull Requests While Moving</span></label>
+                <div class="settings-slider-row">
+                    <label for="request-culling-slider">Culling multiplier</label>
+                    <input type="range" id="request-culling-slider" min="60" max="120" step="5" value="75">
+                    <span id="request-culling-value">75</span>
+                </div>
+                <p class="settings-hint">Avoids downloading tiles that will be obsolete by the time they arrive. Auto-adapts within this range as vehicle speed increases (60 low speed → 90 high speed).</p>
+
+                <label class="check-row"><input type="checkbox" id="progressive-resolution"><span>Progressive Resolution Loading</span></label>
+                <div class="settings-slider-row">
+                    <label for="progressive-resolution-slider">Height fraction</label>
+                    <input type="range" id="progressive-resolution-slider" min="0.20" max="0.40" step="0.01" value="0.30">
+                    <span id="progressive-resolution-value">0.30</span>
+                </div>
+                <p class="settings-hint">Shows a usable low-resolution scene quickly, then refines. Helpful during fast movement and teleports.</p>
+
+                <label class="check-row"><input type="checkbox" id="preload-flight-dest"><span>Preload Flight Destinations</span></label>
+                <p class="settings-hint">Prepares tiles ahead of the vehicle/camera's direction of travel.</p>
+
+                <label class="check-row"><input type="checkbox" id="adaptive-performance"><span>Adaptive Performance Controller</span></label>
+                <p class="settings-hint">Continuously measures FPS and automatically adjusts MAP resolution scale (with hysteresis, ~1.5s cooldown) instead of a fixed quality preset. Overrides the MAP slider while active.</p>
+            </div>
+
             <div class="settings-section">
                 <h3>Cesium Ion Access Token</h3>
                 <p class="settings-hint">Required for World Terrain &amp; Google 3D Tiles. Get one at <a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">ion.cesium.com</a>.</p>

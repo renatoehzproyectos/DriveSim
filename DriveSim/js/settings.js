@@ -15,7 +15,18 @@ const Settings = (() => {
         followDelayMs: 'ds:followDelayMs',
         sseValue: 'ds:sseValue',
         dynamicSse: 'ds:dynamicSse',
-        mapQuality: 'ds:mapQuality'
+        mapQuality: 'ds:mapQuality',
+        // --- New CesiumJS performance-booster features ---
+        nativeDynamicSse: 'ds:nativeDynamicSse',
+        nativeDynamicSseFactor: 'ds:nativeDynamicSseFactor',
+        foveated: 'ds:foveated',
+        foveatedDelay: 'ds:foveatedDelay',
+        requestCulling: 'ds:requestCulling',
+        requestCullingMultiplier: 'ds:requestCullingMultiplier',
+        progressiveResolution: 'ds:progressiveResolution',
+        progressiveResolutionFraction: 'ds:progressiveResolutionFraction',
+        preloadFlightDest: 'ds:preloadFlightDest',
+        adaptivePerformance: 'ds:adaptivePerformance'
     };
 
     function get() {
@@ -28,7 +39,18 @@ const Settings = (() => {
             followDelayMs: parseInt(localStorage.getItem(KEYS.followDelayMs), 10) || 0,
             sseValue: parseFloat(localStorage.getItem(KEYS.sseValue)) || 2,
             dynamicSse: localStorage.getItem(KEYS.dynamicSse) === '1',
-            mapQuality: parseInt(localStorage.getItem(KEYS.mapQuality), 10) || 12
+            mapQuality: parseInt(localStorage.getItem(KEYS.mapQuality), 10) || 12,
+            // --- New CesiumJS performance-booster features (default OFF, opt-in) ---
+            nativeDynamicSse: localStorage.getItem(KEYS.nativeDynamicSse) === '1',
+            nativeDynamicSseFactor: parseFloat(localStorage.getItem(KEYS.nativeDynamicSseFactor)) || 24.0,
+            foveated: localStorage.getItem(KEYS.foveated) === '1',
+            foveatedDelay: parseFloat(localStorage.getItem(KEYS.foveatedDelay)) || 0.15,
+            requestCulling: localStorage.getItem(KEYS.requestCulling) === '1',
+            requestCullingMultiplier: parseFloat(localStorage.getItem(KEYS.requestCullingMultiplier)) || 75,
+            progressiveResolution: localStorage.getItem(KEYS.progressiveResolution) === '1',
+            progressiveResolutionFraction: parseFloat(localStorage.getItem(KEYS.progressiveResolutionFraction)) || 0.30,
+            preloadFlightDest: localStorage.getItem(KEYS.preloadFlightDest) === '1',
+            adaptivePerformance: localStorage.getItem(KEYS.adaptivePerformance) === '1'
         };
     }
 
@@ -42,6 +64,16 @@ const Settings = (() => {
         if (partial.sseValue !== undefined) localStorage.setItem(KEYS.sseValue, String(partial.sseValue));
         if (partial.dynamicSse !== undefined) localStorage.setItem(KEYS.dynamicSse, partial.dynamicSse ? '1' : '0');
         if (partial.mapQuality !== undefined) localStorage.setItem(KEYS.mapQuality, String(partial.mapQuality));
+        if (partial.nativeDynamicSse !== undefined) localStorage.setItem(KEYS.nativeDynamicSse, partial.nativeDynamicSse ? '1' : '0');
+        if (partial.nativeDynamicSseFactor !== undefined) localStorage.setItem(KEYS.nativeDynamicSseFactor, String(partial.nativeDynamicSseFactor));
+        if (partial.foveated !== undefined) localStorage.setItem(KEYS.foveated, partial.foveated ? '1' : '0');
+        if (partial.foveatedDelay !== undefined) localStorage.setItem(KEYS.foveatedDelay, String(partial.foveatedDelay));
+        if (partial.requestCulling !== undefined) localStorage.setItem(KEYS.requestCulling, partial.requestCulling ? '1' : '0');
+        if (partial.requestCullingMultiplier !== undefined) localStorage.setItem(KEYS.requestCullingMultiplier, String(partial.requestCullingMultiplier));
+        if (partial.progressiveResolution !== undefined) localStorage.setItem(KEYS.progressiveResolution, partial.progressiveResolution ? '1' : '0');
+        if (partial.progressiveResolutionFraction !== undefined) localStorage.setItem(KEYS.progressiveResolutionFraction, String(partial.progressiveResolutionFraction));
+        if (partial.preloadFlightDest !== undefined) localStorage.setItem(KEYS.preloadFlightDest, partial.preloadFlightDest ? '1' : '0');
+        if (partial.adaptivePerformance !== undefined) localStorage.setItem(KEYS.adaptivePerformance, partial.adaptivePerformance ? '1' : '0');
     }
 
     /** Rough heuristic for "bad device" that should not run Cesium 3D globe rendering */
@@ -87,7 +119,9 @@ const Settings = (() => {
         onFovChange,
         onFollowDelayChange,
         onSseChange,
-        onMapQualityChange
+        onMapQualityChange,
+        onStreamingChange,
+        onAdaptivePerformanceChange
     } = {}) {
         const state = get();
 
@@ -209,6 +243,119 @@ const Settings = (() => {
                 set({ mapQuality: level });
                 if (typeof onMapQualityChange === 'function') onMapQualityChange(level);
             });
+        }
+
+        // --- New CesiumJS performance-booster features ---
+        const fireStreamingChange = () => {
+            if (typeof onStreamingChange === 'function') onStreamingChange();
+        };
+
+        const nativeDynamicSseEl = document.getElementById('native-dynamic-sse');
+        const nativeDynamicSseFactorSlider = document.getElementById('native-dynamic-sse-factor-slider');
+        const nativeDynamicSseFactorLabel = document.getElementById('native-dynamic-sse-factor-value');
+        if (nativeDynamicSseEl) {
+            nativeDynamicSseEl.checked = state.nativeDynamicSse;
+            nativeDynamicSseEl.addEventListener('change', () => {
+                set({ nativeDynamicSse: nativeDynamicSseEl.checked });
+                fireStreamingChange();
+            });
+        }
+        if (nativeDynamicSseFactorSlider) {
+            nativeDynamicSseFactorSlider.value = state.nativeDynamicSseFactor;
+            if (nativeDynamicSseFactorLabel) nativeDynamicSseFactorLabel.textContent = state.nativeDynamicSseFactor.toFixed(0);
+            nativeDynamicSseFactorSlider.addEventListener('input', () => {
+                const v = parseFloat(nativeDynamicSseFactorSlider.value);
+                if (nativeDynamicSseFactorLabel) nativeDynamicSseFactorLabel.textContent = v.toFixed(0);
+                set({ nativeDynamicSseFactor: v });
+                fireStreamingChange();
+            });
+        }
+
+        const foveatedEl = document.getElementById('foveated-loading');
+        const foveatedDelaySlider = document.getElementById('foveated-delay-slider');
+        const foveatedDelayLabel = document.getElementById('foveated-delay-value');
+        if (foveatedEl) {
+            foveatedEl.checked = state.foveated;
+            foveatedEl.addEventListener('change', () => {
+                set({ foveated: foveatedEl.checked });
+                fireStreamingChange();
+            });
+        }
+        if (foveatedDelaySlider) {
+            foveatedDelaySlider.value = state.foveatedDelay;
+            if (foveatedDelayLabel) foveatedDelayLabel.textContent = `${state.foveatedDelay.toFixed(2)}s`;
+            foveatedDelaySlider.addEventListener('input', () => {
+                const v = parseFloat(foveatedDelaySlider.value);
+                if (foveatedDelayLabel) foveatedDelayLabel.textContent = `${v.toFixed(2)}s`;
+                set({ foveatedDelay: v });
+                fireStreamingChange();
+            });
+        }
+
+        const requestCullingEl = document.getElementById('request-culling');
+        const requestCullingSlider = document.getElementById('request-culling-slider');
+        const requestCullingLabel = document.getElementById('request-culling-value');
+        if (requestCullingEl) {
+            requestCullingEl.checked = state.requestCulling;
+            requestCullingEl.addEventListener('change', () => {
+                set({ requestCulling: requestCullingEl.checked });
+                fireStreamingChange();
+            });
+        }
+        if (requestCullingSlider) {
+            requestCullingSlider.value = state.requestCullingMultiplier;
+            if (requestCullingLabel) requestCullingLabel.textContent = String(state.requestCullingMultiplier);
+            requestCullingSlider.addEventListener('input', () => {
+                const v = parseFloat(requestCullingSlider.value);
+                if (requestCullingLabel) requestCullingLabel.textContent = String(v);
+                set({ requestCullingMultiplier: v });
+                fireStreamingChange();
+            });
+        }
+
+        const progressiveResEl = document.getElementById('progressive-resolution');
+        const progressiveResSlider = document.getElementById('progressive-resolution-slider');
+        const progressiveResLabel = document.getElementById('progressive-resolution-value');
+        if (progressiveResEl) {
+            progressiveResEl.checked = state.progressiveResolution;
+            progressiveResEl.addEventListener('change', () => {
+                set({ progressiveResolution: progressiveResEl.checked });
+                fireStreamingChange();
+            });
+        }
+        if (progressiveResSlider) {
+            progressiveResSlider.value = state.progressiveResolutionFraction;
+            if (progressiveResLabel) progressiveResLabel.textContent = state.progressiveResolutionFraction.toFixed(2);
+            progressiveResSlider.addEventListener('input', () => {
+                const v = parseFloat(progressiveResSlider.value);
+                if (progressiveResLabel) progressiveResLabel.textContent = v.toFixed(2);
+                set({ progressiveResolutionFraction: v });
+                fireStreamingChange();
+            });
+        }
+
+        const preloadFlightEl = document.getElementById('preload-flight-dest');
+        if (preloadFlightEl) {
+            preloadFlightEl.checked = state.preloadFlightDest;
+            preloadFlightEl.addEventListener('change', () => {
+                set({ preloadFlightDest: preloadFlightEl.checked });
+                fireStreamingChange();
+            });
+        }
+
+        const adaptivePerfEl = document.getElementById('adaptive-performance');
+        if (adaptivePerfEl) {
+            adaptivePerfEl.checked = state.adaptivePerformance;
+            adaptivePerfEl.addEventListener('change', () => {
+                set({ adaptivePerformance: adaptivePerfEl.checked });
+                if (typeof onAdaptivePerformanceChange === 'function') onAdaptivePerformanceChange(adaptivePerfEl.checked);
+            });
+        }
+
+        // These streaming/adaptive features are Cesium-only; hide the section for Leaflet (Plan B)
+        const streamingSection = document.getElementById('streaming-section');
+        if (streamingSection && !isCesium) {
+            streamingSection.classList.add('disabled');
         }
 
         const tokenInput = document.getElementById('ion-token-input');
