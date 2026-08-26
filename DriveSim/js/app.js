@@ -115,7 +115,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     window.__driveSimConfigurePhotorealisticTileset = configurePhotorealisticTileset;
 
-    // 2b. Terrain mode: flat | worldterrain | google3d (switchable live from Settings)
+    // 2b. First time the user picks Google Photorealistic 3D Tiles, auto-enable the
+    // streaming/adaptive features tuned for it (heavier tiles need more help staying
+    // smooth than flat terrain / world terrain). Only runs once — after that the user's
+    // own choices in Settings are respected on every subsequent switch.
+    const GOOGLE3D_TUNED_KEY = 'ds:google3dTuned';
+    function applyRecommendedGoogle3DProfile() {
+        if (localStorage.getItem(GOOGLE3D_TUNED_KEY) === '1') return;
+        localStorage.setItem(GOOGLE3D_TUNED_KEY, '1');
+
+        Settings.set({
+            nativeDynamicSse: true,
+            nativeDynamicSseFactor: 24,
+            foveated: true,
+            foveatedDelay: 0.15,
+            requestCulling: true,
+            requestCullingMultiplier: 75,
+            progressiveResolution: true,
+            progressiveResolutionFraction: 0.30,
+            preloadFlightDest: true,
+            adaptivePerformance: true,
+            sseValue: 4
+        });
+
+        // Reflect the new values in the open/closed Settings panel so the UI never lies
+        const sync = (id, prop, fmt) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const val = Settings.get()[prop];
+            if (el.type === 'checkbox') el.checked = val;
+            else el.value = val;
+            const label = document.getElementById(id.replace(/-slider$/, '-value'));
+            if (label && fmt) label.textContent = fmt(val);
+        };
+        sync('native-dynamic-sse', 'nativeDynamicSse');
+        sync('native-dynamic-sse-factor-slider', 'nativeDynamicSseFactor', v => v.toFixed(0));
+        sync('foveated-loading', 'foveated');
+        sync('foveated-delay-slider', 'foveatedDelay', v => `${v.toFixed(2)}s`);
+        sync('request-culling', 'requestCulling');
+        sync('request-culling-slider', 'requestCullingMultiplier', v => String(v));
+        sync('progressive-resolution', 'progressiveResolution');
+        sync('progressive-resolution-slider', 'progressiveResolutionFraction', v => v.toFixed(2));
+        sync('preload-flight-dest', 'preloadFlightDest');
+        sync('adaptive-performance', 'adaptivePerformance');
+        sync('sse-slider', 'sseValue', v => v.toFixed(1));
+    }
+
+    // 2c. Terrain mode: flat | worldterrain | google3d (switchable live from Settings)
     async function applyTerrain(mode) {
         if (viewer._googleTileset) {
             viewer.scene.primitives.remove(viewer._googleTileset);
@@ -131,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     requestVertexNormals: true
                 });
             } else if (mode === 'google3d') {
+                applyRecommendedGoogle3DProfile();
                 const tileset = await Cesium.createGooglePhotorealistic3DTileset();
                 // Default 3D Tiles optimisations (Skip LOD + SSE)
                 tileset.skipLevelOfDetail = true;
