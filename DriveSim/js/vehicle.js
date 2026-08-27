@@ -179,9 +179,13 @@ class Vehicle {
     }
 
     update(dt, input) {
-        // Ground-clamping: re-sample terrain height every heightSampleIntervalMs
+        // Ground-clamping: re-sample terrain height every heightSampleIntervalMs.
+        // Only reset the accumulator once a sample actually starts — if the previous
+        // async sample is still in flight (_heightSampling), keep the accumulator
+        // pegged at/above the threshold so we retry the instant it's free, instead of
+        // silently skipping and making the slider look like it does nothing.
         this._heightSampleAccumMs += dt * 1000;
-        if (this._heightSampleAccumMs >= this.heightSampleIntervalMs) {
+        if (this._heightSampleAccumMs >= this.heightSampleIntervalMs && !this._heightSampling) {
             this._heightSampleAccumMs = 0;
             this.sampleGroundHeight();
         }
