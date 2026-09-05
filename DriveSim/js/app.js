@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             progressiveResolution: true,
             progressiveResolutionFraction: 0.30,
             preloadFlightDest: true,
-            adaptivePerformance: true,
+            adaptivePerformance: false,
             sseValue: 4
         });
 
