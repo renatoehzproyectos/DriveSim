@@ -247,5 +247,21 @@
     <script src="js/leaflet-fallback.js"></script>
     <script src="js/app.js"></script>
     <script src="./OpeScale.js"></script>
+    <script type="module">
+  import MegaScale from 'https://cdn.jsdelivr.net/gh/renatoehzproyectos/MegaScale@main/dist/megascale.js';
+
+  const waitForCanvas = setInterval(() => {
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      clearInterval(waitForCanvas);
+      MegaScale.start({
+        canvas: canvas,
+        targetFps: 60,
+        profile: 'auto',
+        overlay: true
+      });
+    }
+  }, 100);
+    </script>
 </body>
 </html>
