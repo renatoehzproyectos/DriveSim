@@ -1,5 +1,5 @@
 /**
- * OpenScale v1.8.0-hyperplan
+ * OpenScale v1.8.1-hyperplan
  * FASE 1–10 (lite): Intelligent DRS + C2D present + optional WebGPU reconstruct
  * Neural full weights = still v2; compute-lite counts as FASE 10 progress
  *
@@ -33,7 +33,7 @@
     DISABLE_MS: 4000,
     SPATIAL_2D: true,
     TEMPORAL_2D: true,
-    TEMPORAL_ALPHA: 0.18,
+    TEMPORAL_ALPHA: 0.12,
     SHARPEN_CSS: true,
     SMOOTHING: "high",
     MOTION_ADAPT: true,
@@ -258,7 +258,7 @@
     } catch (e) { this.ready = false; }
   };
   Present2D.prototype._applySharpen = function () {
-    if (this.display) this.display.style.filter = this.sharpenOn ? "contrast(1.07) saturate(1.05)" : "none";
+    if (this.display) this.display.style.filter = this.sharpenOn ? "contrast(1.05) saturate(1.18)" : "none";
   };
   Present2D.prototype.setTemporal = function (on) { this.temporalOn = !!on; };
   Present2D.prototype.setSharpen = function (on) { this.sharpenOn = !!on; this._applySharpen(); };
@@ -344,13 +344,13 @@
     "  }",
     "  // Residual center pixel",
     "  let center = textureSample(tex, samp, inp.uv).rgb;",
-    "  rgb = mix(center, rgb, 0.72);",
-    "  rgb = clamp(rgb, vec3f(0.0), vec3f(1.0));",
+    "  rgb = mix(center, rgb, 0.35);",
+    "  rgb = clamp(rgb, vec3f(0.0), vec3f(1.0)); let lum = dot(rgb, vec3f(0.2126, 0.7152, 0.0722)); rgb = clamp(mix(vec3f(lum), rgb, 1.22), vec3f(0.0), vec3f(1.0));",
     "  // Temporal history blend (FASE 5/10)",
     "  let prev = textureSample(hist, samp, inp.uv).rgb;",
     "  let diff = abs(rgb - prev);",
     "  let motion = clamp(length(diff) * 3.5, 0.0, 1.0);",
-    "  let a = tp.blend * (1.0 - motion * 0.9);",
+    "  let a = tp.blend * 0.65 * (1.0 - motion * 0.9);",
     "  rgb = mix(rgb, prev, a);",
     "  return vec4f(rgb, 1.0);",
     "}"
@@ -709,18 +709,17 @@
   };
   OpenScale.prototype._updOverlay = function (snap) {
     this.overlay.textContent =
-      "OpenScale v1.8 hyperplan\n" +
-      "FPS: " + snap.fps + "  ft: " + snap.shortAvg.toFixed(1) + "ms\\n" +
-      "Trend: " + (snap.trend >= 0 ? "+" : "") + snap.trend.toFixed(2) + "\\n" +
-      "Disp: " + this.displayW + "×" + this.displayH + "\\n" +
-      "Sim:  " + this.simW + "×" + this.simH + "\\n" +
-      "Scale: " + Math.round(this.scale * 100) + "%  Mode: " + this.engine.mode + "\\n" +
-      "Conf: " + Math.round(this.engine.confidence * 100) + "%\\n" +
-      "Path: " + this.path + "\\n" +
-      "GPU: " + (this.webgpu.reason || "?") + "\\n" +
-      "Neural: " + (this.neural.reason || "?") + "\\n" +
-      "Eff: " + this.effScore + "  OS: " + this.overheadMs.toFixed(2) + "ms\\n" +
-      "HP: 100% runtime hyperplan";
+      "OpenScale v1.8.1\n" +
+      "FPS: " + snap.fps + "  ft: " + snap.shortAvg.toFixed(1) + "ms\n" +
+      "Trend: " + (snap.trend >= 0 ? "+" : "") + snap.trend.toFixed(2) + "\n" +
+      "Disp: " + this.displayW + "x" + this.displayH + "\n" +
+      "Sim:  " + this.simW + "x" + this.simH + "\n" +
+      "Scale: " + Math.round(this.scale * 100) + "%  Mode: " + this.engine.mode + "\n" +
+      "Conf: " + Math.round(this.engine.confidence * 100) + "%\n" +
+      "Path: " + this.path + "\n" +
+      "GPU: " + (this.webgpu.reason || "?") + "\n" +
+      "Neural: " + (this.neural.reason || "?") + "\n" +
+      "Eff: " + this.effScore + "  OS: " + this.overheadMs.toFixed(2) + "ms";
   };
 
   var instance = null;
@@ -742,7 +741,7 @@
     getInstance: function () { return instance; },
     setMotionVectors: function (x) { if (instance) instance._externalMotion = x; },
     setDepthBuffer: function (x) { if (instance) instance._externalDepth = x; },
-    version: "1.8.0-hyperplan",
+    version: "1.8.1-hyperplan",
     hyperplanComplete: "1-10-complete",
     neural: "tiny-net+temporal"
   };
