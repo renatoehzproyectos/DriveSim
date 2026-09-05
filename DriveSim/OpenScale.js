@@ -1,6 +1,6 @@
 /**
- * OpenScale v1.9.0 — low-overhead pastilla
- * FPS first. Rule: savings > cost.
+ * OpenScale v1.9.1 — FPS first + cheap anti-pixelation
+ * Dynamic resolution + optional light C2D present (only when scale is low)
  * <script src="./OpenScale.js"></script>
  */
 (function (global) {
@@ -20,10 +20,11 @@
     QUANT: 0.05,
     HOLD_MS: 500,
     OSC_N: 8,
-    // Presentation: CSS bilinear only by default (near-zero cost)
-    // Set true only if you accept extra cost for 2D upscale
-    USE_C2D_PRESENT: false,
-    TEMPORAL: false
+    // Quality without killing FPS
+    CHEAP_SHARPEN: true,          // CSS filter on output (~0 ms)
+    LIGHT_PRESENT: true,          // C2D drawImage when scale < threshold
+    PRESENT_BELOW: 0.72,          // only present when sim is clearly lower
+    PRESENT_MAX_MS: 2.5           // auto-disable present if too costly
   };
 
   function avg(a) {
@@ -53,6 +54,11 @@
     this.ft = 16.7;
     this.trend = 0;
     this.frames = 0;
+    this.display = null;
+    this.dctx = null;
+    this.presentOn = false;
+    this.presentAllowed = !!CFG.LIGHT_PRESENT;
+    this.path = "css";
     this._onResize = this._onResize.bind(this);
     this._loop = this._loop.bind(this);
   }
@@ -98,11 +104,10 @@
     this.raf = 0;
     window.removeEventListener("resize", this._onResize);
     window.removeEventListener("orientationchange", this._onResize);
+    this._teardownPresent();
     if (this.overlay && this.overlay.parentNode) this.overlay.parentNode.removeChild(this.overlay);
     this.overlay = null;
-    if (this.canvas) {
-      this.canvas.style.opacity = "1";
-    }
+    if (this.canvas) this.canvas.style.opacity = "1";
     return this;
   };
 
@@ -112,6 +117,7 @@
     this.mode = "HOLD";
     this.holdUntil = performance.now() + this.cfg.HOLD_MS;
     this._apply();
+    this._syncPresent();
     return this;
   };
 
@@ -135,7 +141,8 @@
       display: { width: this.dW, height: this.dH },
       simulation: { width: this.sW, height: this.sH },
       scale: this.scale,
-      mode: this.mode
+      mode: this.mode,
+      path: this.path
     };
   };
 
@@ -151,9 +158,14 @@
     c.style.visibility = "visible";
     if (!c.style.width) c.style.width = "100%";
     if (!c.style.height) c.style.height = "100%";
+    // Free anti-pixelation: slight sharpen/contrast on the visible surface
+    if (this.cfg.CHEAP_SHARPEN) {
+      c.style.filter = "contrast(1.06) saturate(1.1)";
+    }
     this._updateDisp();
     this.scale = this.cfg.INITIAL_SCALE;
     this._apply();
+    this._syncPresent();
     window.addEventListener("resize", this._onResize, { passive: true });
     window.addEventListener("orientationchange", this._onResize, { passive: true });
     c.addEventListener("webglcontextlost", function (e) { e.preventDefault(); }, false);
@@ -174,13 +186,22 @@
     if (!this.canvas) return;
     this.sW = Math.max(1, Math.round(this.dW * this.scale));
     this.sH = Math.max(1, Math.round(this.dH * this.scale));
-    // Only touch buffer when size changes (avoids GL reset thrash)
     if (this.canvas.width !== this.sW || this.canvas.height !== this.sH) {
       this.canvas.width = this.sW;
       this.canvas.height = this.sH;
     }
     this.canvas.style.width = "100%";
     this.canvas.style.height = "100%";
+    if (this.display) {
+      var cssW = this.canvas.clientWidth || window.innerWidth;
+      var cssH = this.canvas.clientHeight || window.innerHeight;
+      if (this.display.width !== this.dW || this.display.height !== this.dH) {
+        this.display.width = this.dW;
+        this.display.height = this.dH;
+      }
+      this.display.style.width = cssW + "px";
+      this.display.style.height = cssH + "px";
+    }
   };
 
   OpenScale.prototype._onResize = function () {
@@ -189,7 +210,89 @@
     this._rt = setTimeout(function () {
       self._updateDisp();
       self._apply();
+      self._syncPresent();
     }, 80);
+  };
+
+  // --- Light present: better upscale than CSS alone, still cheap ---
+  OpenScale.prototype._syncPresent = function () {
+    var want = this.presentAllowed && this.cfg.LIGHT_PRESENT && this.scale < this.cfg.PRESENT_BELOW;
+    if (want && !this.presentOn) this._setupPresent();
+    else if (!want && this.presentOn) this._teardownPresent();
+  };
+
+  OpenScale.prototype._setupPresent = function () {
+    if (!this.canvas || this.presentOn) return;
+    try {
+      var d = document.createElement("canvas");
+      d.id = "openscale-display";
+      d.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;display:block;z-index:1;pointer-events:none;";
+      if (this.cfg.CHEAP_SHARPEN) {
+        d.style.filter = "contrast(1.08) saturate(1.12)";
+      }
+      var parent = this.canvas.parentNode || document.body;
+      if (parent !== document.body) {
+        var pos = getComputedStyle(parent).position;
+        if (pos === "static") parent.style.position = "relative";
+      }
+      parent.insertBefore(d, this.canvas.nextSibling);
+      this.canvas.style.position = "absolute";
+      this.canvas.style.left = "0";
+      this.canvas.style.top = "0";
+      this.canvas.style.zIndex = "0";
+      // keep opacity 1 until first successful draw
+      this.display = d;
+      this.dctx = d.getContext("2d", { alpha: false, desynchronized: true });
+      if (!this.dctx) {
+        this._teardownPresent();
+        return;
+      }
+      this.dctx.imageSmoothingEnabled = true;
+      if (this.dctx.imageSmoothingQuality) this.dctx.imageSmoothingQuality = "high";
+      this.presentOn = true;
+      this.path = "c2d-light";
+      this._apply();
+    } catch (e) {
+      this.presentAllowed = false;
+      this._teardownPresent();
+    }
+  };
+
+  OpenScale.prototype._teardownPresent = function () {
+    if (this.display && this.display.parentNode) this.display.parentNode.removeChild(this.display);
+    this.display = null;
+    this.dctx = null;
+    this.presentOn = false;
+    this.path = "css";
+    if (this.canvas) {
+      this.canvas.style.opacity = "1";
+      this.canvas.style.zIndex = "";
+      if (this.cfg.CHEAP_SHARPEN) {
+        this.canvas.style.filter = "contrast(1.06) saturate(1.1)";
+      } else {
+        this.canvas.style.filter = "";
+      }
+    }
+  };
+
+  OpenScale.prototype._present = function () {
+    if (!this.presentOn || !this.dctx || !this.canvas.width) return;
+    var t0 = performance.now();
+    try {
+      this.dctx.imageSmoothingEnabled = true;
+      if (this.dctx.imageSmoothingQuality) this.dctx.imageSmoothingQuality = "high";
+      this.dctx.drawImage(this.canvas, 0, 0, this.display.width, this.display.height);
+      if (this.canvas.style.opacity !== "0") this.canvas.style.opacity = "0";
+      var cost = performance.now() - t0;
+      // FPS priority: if present is expensive, kill it
+      if (cost > this.cfg.PRESENT_MAX_MS && this.frames > 45) {
+        this.presentAllowed = false;
+        this._teardownPresent();
+      }
+    } catch (e) {
+      this.presentAllowed = false;
+      this._teardownPresent();
+    }
   };
 
   OpenScale.prototype._pushDir = function (d) {
@@ -208,12 +311,8 @@
     if (!this.cfg.DYNAMIC_RESOLUTION || !this.enabled) return;
     if (now < this.holdUntil) return;
 
-    var ft = this.ft;
-    var trend = this.trend;
-    var scale = this.scale;
-    var cfg = this.cfg;
+    var ft = this.ft, trend = this.trend, scale = this.scale, cfg = this.cfg;
 
-    // EMERGENCY
     if (ft > cfg.PANIC_MS) {
       this.mode = "EMERGENCY";
       var drop = this._q(scale - Math.max(cfg.COARSE, 0.12));
@@ -223,11 +322,11 @@
         this.zone = drop;
         this.holdUntil = now + 250;
         this._apply();
+        this._syncPresent();
       }
       return;
     }
 
-    // Fast recovery when improving
     if (this.mode === "EMERGENCY" && (ft < cfg.COMFORT_MS || trend < -0.5)) {
       this.mode = "RECOVERY";
     }
@@ -240,17 +339,13 @@
       return;
     }
 
-    // Stability zone
     if (this.mode === "HOLD") {
-      if (Math.abs(scale - this.zone) <= 0.06 && ft <= cfg.COMFORT_MS && trend < 0.3) {
-        return;
-      }
+      if (Math.abs(scale - this.zone) <= 0.06 && ft <= cfg.COMFORT_MS && trend < 0.3) return;
       if (ft > cfg.COMFORT_MS + 4) this.mode = "SEARCH";
       else if (ft < cfg.TARGET_MS - 2) this.mode = "RECOVERY";
       else return;
     }
 
-    // No benefit from lowering → stop (CPU-bound scenes like Cesium)
     if (this.noGain >= 4 && ft > cfg.COMFORT_MS) {
       this.mode = "HOLD";
       this.zone = scale;
@@ -260,7 +355,6 @@
 
     var wantDown = ft > cfg.COMFORT_MS || (trend > 0.4 && ft > cfg.TARGET_MS);
     var wantUp = ft < cfg.TARGET_MS && (this.mode === "RECOVERY" || this.mode === "SEARCH" || trend < -0.3);
-
     var step = (this.mode === "RECOVERY" || this.mode === "EMERGENCY") ? cfg.COARSE : cfg.FINE;
     if (ft > cfg.COMFORT_MS + 8) step = cfg.COARSE;
 
@@ -278,7 +372,7 @@
       this.scale = next;
       this.holdUntil = now + cfg.HOLD_MS;
       this._apply();
-      // Learn: if we lowered and FPS didn't move, count noGain (checked next samples)
+      this._syncPresent();
       this._pending = { prevScale: prevScale, fps: this.fps, at: now };
       if (Math.abs(next - this.zone) < cfg.FINE) {
         this.zone = next;
@@ -296,7 +390,6 @@
   OpenScale.prototype._loop = function (now) {
     if (!this.running) return;
 
-    // Frame timing — O(1) work
     if (this.lastT) {
       var d = now - this.lastT;
       if (d > 1 && d < 250) {
@@ -304,7 +397,6 @@
         if (this.hist.length > 20) this.hist.shift();
         this.ft = avg(this.hist);
         this.fps = Math.round((1000 / this.ft) * 10) / 10;
-        // simple trend: last 4 vs previous 4
         if (this.hist.length >= 8) {
           var a = 0, b = 0, i;
           for (i = 0; i < 4; i++) b += this.hist[this.hist.length - 1 - i];
@@ -316,7 +408,6 @@
     this.lastT = now;
     this.frames++;
 
-    // Learn from scale change
     if (this._pending && now - this._pending.at > 400) {
       if (this.scale < this._pending.prevScale) {
         if (this.fps < this._pending.fps + 2) this.noGain++;
@@ -327,7 +418,9 @@
 
     this._decide(now);
 
-    // Overlay every 10 frames only
+    // Present AFTER decide — samples latest game frame when possible
+    if (this.presentOn) this._present();
+
     if (this.overlay && (this.frames % 10) === 0) this._updOverlay();
 
     this.raf = requestAnimationFrame(this._loop);
@@ -343,13 +436,13 @@
 
   OpenScale.prototype._updOverlay = function () {
     this.overlay.textContent =
-      "OpenScale v1.9\n" +
+      "OpenScale v1.9.1\n" +
       "FPS: " + this.fps + "  ft: " + this.ft.toFixed(1) + "ms\n" +
       "Trend: " + (this.trend >= 0 ? "+" : "") + this.trend.toFixed(2) + "\n" +
       "Disp: " + this.dW + "x" + this.dH + "\n" +
       "Sim:  " + this.sW + "x" + this.sH + "\n" +
       "Scale: " + Math.round(this.scale * 100) + "%  Mode: " + this.mode + "\n" +
-      "Path: css-bilinear (low cost)";
+      "Path: " + this.path + (this.cfg.CHEAP_SHARPEN ? "+sharp" : "");
   };
 
   var instance = null;
@@ -369,6 +462,6 @@
     getFPS: function () { return instance ? instance.getFPS() : 0; },
     getResolution: function () { return instance ? instance.getResolution() : null; },
     getInstance: function () { return instance; },
-    version: "1.9.0"
+    version: "1.9.1"
   };
 })(typeof window !== "undefined" ? window : this);
